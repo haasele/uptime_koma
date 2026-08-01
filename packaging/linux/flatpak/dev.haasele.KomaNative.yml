@@ -1,0 +1,31 @@
+# Staging path / launcher name substituted by packaging/linux/package.sh
+# (__STAGING_DIR__, __APP_LAUNCHER__).
+app-id: dev.haasele.KomaNative
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: koma-native
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  - --filesystem=xdg-config/koma-native:create
+  - --filesystem=xdg-data/koma-native:create
+  # Java AWT under Wayland / xwayland-satellite (niri Application Issues → Ghidra)
+  - --env=_JAVA_AWT_WM_NONREPARENTING=1
+  - --env=GDK_SCALE=1
+  - --env=GDK_DPI_SCALE=1
+modules:
+  - name: koma-native
+    buildsystem: simple
+    build-commands:
+      - install -d /app/lib/koma-native
+      - cp -a app/. /app/lib/koma-native/
+      - install -Dm755 app/bin/__APP_LAUNCHER__ /app/bin/koma-native
+      - install -Dm644 share/applications/dev.haasele.KomaNative.desktop /app/share/applications/dev.haasele.KomaNative.desktop
+      - install -Dm644 share/icons/hicolor/256x256/apps/dev.haasele.KomaNative.png /app/share/icons/hicolor/256x256/apps/dev.haasele.KomaNative.png
+    sources:
+      - type: dir
+        path: __STAGING_DIR__

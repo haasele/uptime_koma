@@ -1,0 +1,16 @@
+CREATE TABLE setting (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+selectAll:
+SELECT * FROM setting;
+
+selectByKey:
+SELECT value FROM setting WHERE key = ?;
+
+upsert:
+INSERT OR REPLACE INTO setting (key, value) VALUES (?, ?);
+
+deleteByKey:
+DELETE FROM setting WHERE key = ?;

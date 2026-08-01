@@ -1,0 +1,54 @@
+CREATE TABLE notification_channel (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    config TEXT NOT NULL DEFAULT '{}',
+    active INTEGER AS kotlin.Boolean NOT NULL DEFAULT 1,
+    is_default INTEGER AS kotlin.Boolean NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE monitor_notification (
+    monitor_id INTEGER NOT NULL,
+    notification_id INTEGER NOT NULL,
+    PRIMARY KEY (monitor_id, notification_id)
+);
+
+selectAll:
+SELECT * FROM notification_channel ORDER BY name ASC;
+
+selectById:
+SELECT * FROM notification_channel WHERE id = ?;
+
+selectDefaults:
+SELECT * FROM notification_channel WHERE is_default = 1 AND active = 1;
+
+insertChannel:
+INSERT INTO notification_channel (name, provider, config, active, is_default, created_at)
+VALUES (?, ?, ?, ?, ?, ?);
+
+updateChannel:
+UPDATE notification_channel SET name = ?, provider = ?, config = ?, active = ?, is_default = ? WHERE id = ?;
+
+deleteChannel:
+DELETE FROM notification_channel WHERE id = ?;
+
+selectForMonitor:
+SELECT n.* FROM monitor_notification mn
+INNER JOIN notification_channel n ON n.id = mn.notification_id
+WHERE mn.monitor_id = ? AND n.active = 1;
+
+selectIdsForMonitor:
+SELECT notification_id FROM monitor_notification WHERE monitor_id = ?;
+
+linkNotification:
+INSERT OR REPLACE INTO monitor_notification (monitor_id, notification_id) VALUES (?, ?);
+
+unlinkForMonitor:
+DELETE FROM monitor_notification WHERE monitor_id = ?;
+
+unlinkChannel:
+DELETE FROM monitor_notification WHERE notification_id = ?;
+
+lastInsertedId:
+SELECT last_insert_rowid();

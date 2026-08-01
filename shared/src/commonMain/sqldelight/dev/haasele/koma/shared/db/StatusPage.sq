@@ -1,0 +1,103 @@
+CREATE TABLE status_page (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    slug TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    description TEXT,
+    icon TEXT,
+    theme TEXT NOT NULL DEFAULT 'auto',
+    published INTEGER AS kotlin.Boolean NOT NULL DEFAULT 1,
+    show_tags INTEGER AS kotlin.Boolean NOT NULL DEFAULT 0,
+    show_uptime_percentage INTEGER AS kotlin.Boolean NOT NULL DEFAULT 1,
+    show_certificate_expiry INTEGER AS kotlin.Boolean NOT NULL DEFAULT 0,
+    footer_text TEXT,
+    accent_color TEXT,
+    password_hash TEXT,
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE status_page_group (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    status_page_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    weight INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE status_page_group_monitor (
+    group_id INTEGER NOT NULL,
+    monitor_id INTEGER NOT NULL,
+    weight INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (group_id, monitor_id)
+);
+
+CREATE TABLE incident (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    status_page_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    style TEXT NOT NULL DEFAULT 'warning',
+    pin INTEGER AS kotlin.Boolean NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    last_updated_at INTEGER NOT NULL
+);
+
+selectAllPages:
+SELECT * FROM status_page ORDER BY title ASC;
+
+selectPageById:
+SELECT * FROM status_page WHERE id = ?;
+
+selectPageBySlug:
+SELECT * FROM status_page WHERE slug = ?;
+
+insertPage:
+INSERT INTO status_page (slug, title, description, icon, theme, published, show_tags,
+    show_uptime_percentage, show_certificate_expiry, footer_text, accent_color, password_hash, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updatePage:
+UPDATE status_page SET slug = ?, title = ?, description = ?, icon = ?, theme = ?, published = ?,
+    show_tags = ?, show_uptime_percentage = ?, show_certificate_expiry = ?, footer_text = ?,
+    accent_color = ?, password_hash = ? WHERE id = ?;
+
+deletePage:
+DELETE FROM status_page WHERE id = ?;
+
+selectGroups:
+SELECT * FROM status_page_group WHERE status_page_id = ? ORDER BY weight ASC, id ASC;
+
+insertGroup:
+INSERT INTO status_page_group (status_page_id, name, weight) VALUES (?, ?, ?);
+
+deleteGroupsForPage:
+DELETE FROM status_page_group WHERE status_page_id = ?;
+
+selectGroupMonitors:
+SELECT * FROM status_page_group_monitor WHERE group_id = ? ORDER BY weight ASC;
+
+insertGroupMonitor:
+INSERT OR REPLACE INTO status_page_group_monitor (group_id, monitor_id, weight) VALUES (?, ?, ?);
+
+deleteGroupMonitors:
+DELETE FROM status_page_group_monitor WHERE group_id = ?;
+
+selectIncidents:
+SELECT * FROM incident WHERE status_page_id = ? ORDER BY created_at DESC;
+
+selectPinnedIncident:
+SELECT * FROM incident WHERE status_page_id = ? AND pin = 1 ORDER BY created_at DESC LIMIT 1;
+
+insertIncident:
+INSERT INTO incident (status_page_id, title, content, style, pin, created_at, last_updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+updateIncident:
+UPDATE incident SET title = ?, content = ?, style = ?, pin = ?, last_updated_at = ? WHERE id = ?;
+
+unpinIncidents:
+UPDATE incident SET pin = 0 WHERE status_page_id = ?;
+
+deleteIncident:
+DELETE FROM incident WHERE id = ?;
+
+lastInsertedId:
+SELECT last_insert_rowid();

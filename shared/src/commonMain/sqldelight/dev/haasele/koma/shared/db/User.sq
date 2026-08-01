@@ -1,0 +1,32 @@
+CREATE TABLE user (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    twofa_secret TEXT,
+    twofa_enabled INTEGER AS kotlin.Boolean NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+);
+
+countUsers:
+SELECT count(*) FROM user;
+
+selectByUsername:
+SELECT * FROM user WHERE username = ?;
+
+selectById:
+SELECT * FROM user WHERE id = ?;
+
+insertUser:
+INSERT INTO user (username, password_hash, created_at) VALUES (?, ?, ?);
+
+updatePassword:
+UPDATE user SET password_hash = ? WHERE id = ?;
+
+updateUsername:
+UPDATE user SET username = ? WHERE id = ?;
+
+updateTwoFactor:
+UPDATE user SET twofa_secret = ?, twofa_enabled = ? WHERE id = ?;
+
+lastInsertedId:
+SELECT last_insert_rowid();

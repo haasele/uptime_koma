@@ -1,0 +1,15 @@
+.gradle/
+build/
+**/build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+.DS_Store
+captures/
+xcuserdata/
+*.hprof
+koma-native.db*
+# Accidental local packaging leftovers outside build/
+*.AppImage
+*.flatpak

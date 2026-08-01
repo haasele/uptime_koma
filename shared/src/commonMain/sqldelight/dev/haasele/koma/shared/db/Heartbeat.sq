@@ -1,0 +1,58 @@
+CREATE TABLE heartbeat (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    monitor_id INTEGER NOT NULL,
+    status INTEGER NOT NULL,
+    msg TEXT NOT NULL DEFAULT '',
+    ping_ms INTEGER,
+    important INTEGER AS kotlin.Boolean NOT NULL DEFAULT 0,
+    time_ms INTEGER NOT NULL,
+    duration_seconds INTEGER NOT NULL DEFAULT 0,
+    retries INTEGER NOT NULL DEFAULT 0,
+    down_count INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX heartbeat_monitor_time_idx ON heartbeat(monitor_id, time_ms);
+CREATE INDEX heartbeat_important_idx ON heartbeat(monitor_id, important, time_ms);
+
+insertHeartbeat:
+INSERT INTO heartbeat (monitor_id, status, msg, ping_ms, important, time_ms, duration_seconds, retries, down_count)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+recentByMonitor:
+SELECT * FROM heartbeat WHERE monitor_id = ? ORDER BY time_ms DESC LIMIT ?;
+
+lastByMonitor:
+SELECT * FROM heartbeat WHERE monitor_id = ? ORDER BY time_ms DESC LIMIT 1;
+
+lastImportantByMonitor:
+SELECT * FROM heartbeat WHERE monitor_id = ? AND important = 1 ORDER BY time_ms DESC LIMIT 1;
+
+sinceByMonitor:
+SELECT * FROM heartbeat WHERE monitor_id = ? AND time_ms >= ? ORDER BY time_ms ASC;
+
+importantByMonitor:
+SELECT * FROM heartbeat WHERE monitor_id = ? AND important = 1 ORDER BY time_ms DESC LIMIT ?;
+
+latestPerMonitor:
+SELECT h.* FROM heartbeat h
+INNER JOIN (
+    SELECT monitor_id, MAX(time_ms) AS max_time FROM heartbeat GROUP BY monitor_id
+) m ON h.monitor_id = m.monitor_id AND h.time_ms = m.max_time;
+
+uptimeSince:
+SELECT
+    SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS upCount,
+    SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) AS downCount,
+    SUM(CASE WHEN status = 1 THEN duration_seconds ELSE 0 END) AS upSeconds,
+    SUM(CASE WHEN status = 0 THEN duration_seconds ELSE 0 END) AS downSeconds,
+    AVG(CASE WHEN status = 1 THEN ping_ms END) AS avgPing
+FROM heartbeat WHERE monitor_id = ? AND time_ms >= ?;
+
+deleteByMonitor:
+DELETE FROM heartbeat WHERE monitor_id = ?;
+
+deleteOlderThan:
+DELETE FROM heartbeat WHERE time_ms < ?;
+
+countAll:
+SELECT count(*) FROM heartbeat;

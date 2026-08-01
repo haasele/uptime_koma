@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.KomaNative" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">#FF0E7C63</item>
+        <item name="colorPrimary">#FF0E7C63</item>
+        <item name="colorPrimaryDark">#FF0A5C49</item>
+        <item name="colorAccent">#FF2DD4A7</item>
+    </style>
+</resources>

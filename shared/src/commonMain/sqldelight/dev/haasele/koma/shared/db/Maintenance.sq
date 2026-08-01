@@ -1,0 +1,89 @@
+CREATE TABLE maintenance (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT,
+    strategy TEXT NOT NULL DEFAULT 'single',
+    active INTEGER AS kotlin.Boolean NOT NULL DEFAULT 1,
+    manual_active INTEGER AS kotlin.Boolean NOT NULL DEFAULT 0,
+    timezone TEXT,
+    start_ms INTEGER,
+    end_ms INTEGER,
+    start_time TEXT,
+    end_time TEXT,
+    weekdays TEXT,
+    days_of_month TEXT,
+    cron TEXT,
+    duration_minutes INTEGER,
+    interval_day INTEGER,
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE maintenance_monitor (
+    maintenance_id INTEGER NOT NULL,
+    monitor_id INTEGER NOT NULL,
+    PRIMARY KEY (maintenance_id, monitor_id)
+);
+
+CREATE TABLE maintenance_status_page (
+    maintenance_id INTEGER NOT NULL,
+    status_page_id INTEGER NOT NULL,
+    PRIMARY KEY (maintenance_id, status_page_id)
+);
+
+selectAll:
+SELECT * FROM maintenance ORDER BY created_at DESC;
+
+selectById:
+SELECT * FROM maintenance WHERE id = ?;
+
+selectActive:
+SELECT * FROM maintenance WHERE active = 1;
+
+insertMaintenance:
+INSERT INTO maintenance (title, description, strategy, active, manual_active, timezone,
+    start_ms, end_ms, start_time, end_time, weekdays, days_of_month, cron, duration_minutes,
+    interval_day, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateMaintenance:
+UPDATE maintenance SET title = ?, description = ?, strategy = ?, active = ?, manual_active = ?,
+    timezone = ?, start_ms = ?, end_ms = ?, start_time = ?, end_time = ?, weekdays = ?,
+    days_of_month = ?, cron = ?, duration_minutes = ?, interval_day = ? WHERE id = ?;
+
+setManualActive:
+UPDATE maintenance SET manual_active = ? WHERE id = ?;
+
+setActive:
+UPDATE maintenance SET active = ? WHERE id = ?;
+
+deleteMaintenance:
+DELETE FROM maintenance WHERE id = ?;
+
+selectMonitorIds:
+SELECT monitor_id FROM maintenance_monitor WHERE maintenance_id = ?;
+
+selectAllMonitorLinks:
+SELECT * FROM maintenance_monitor;
+
+linkMonitor:
+INSERT OR REPLACE INTO maintenance_monitor (maintenance_id, monitor_id) VALUES (?, ?);
+
+unlinkMonitors:
+DELETE FROM maintenance_monitor WHERE maintenance_id = ?;
+
+selectStatusPageIds:
+SELECT status_page_id FROM maintenance_status_page WHERE maintenance_id = ?;
+
+linkStatusPage:
+INSERT OR REPLACE INTO maintenance_status_page (maintenance_id, status_page_id) VALUES (?, ?);
+
+unlinkStatusPages:
+DELETE FROM maintenance_status_page WHERE maintenance_id = ?;
+
+selectForStatusPage:
+SELECT m.* FROM maintenance_status_page mp
+INNER JOIN maintenance m ON m.id = mp.maintenance_id
+WHERE mp.status_page_id = ? AND m.active = 1;
+
+lastInsertedId:
+SELECT last_insert_rowid();

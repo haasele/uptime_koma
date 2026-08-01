@@ -1,0 +1,76 @@
+CREATE TABLE proxy (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    protocol TEXT NOT NULL DEFAULT 'http',
+    host TEXT NOT NULL,
+    port INTEGER NOT NULL,
+    username TEXT,
+    password TEXT,
+    active INTEGER AS kotlin.Boolean NOT NULL DEFAULT 1,
+    is_default INTEGER AS kotlin.Boolean NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE docker_host (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    connection_type TEXT NOT NULL DEFAULT 'socket',
+    daemon TEXT NOT NULL DEFAULT '/var/run/docker.sock',
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE api_key (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    key_hash TEXT NOT NULL,
+    prefix TEXT NOT NULL,
+    active INTEGER AS kotlin.Boolean NOT NULL DEFAULT 1,
+    expires_at INTEGER,
+    created_at INTEGER NOT NULL
+);
+
+selectProxies:
+SELECT * FROM proxy ORDER BY host ASC;
+
+selectProxyById:
+SELECT * FROM proxy WHERE id = ?;
+
+insertProxy:
+INSERT INTO proxy (protocol, host, port, username, password, active, is_default, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+updateProxy:
+UPDATE proxy SET protocol = ?, host = ?, port = ?, username = ?, password = ?, active = ?, is_default = ?
+WHERE id = ?;
+
+deleteProxy:
+DELETE FROM proxy WHERE id = ?;
+
+selectDockerHosts:
+SELECT * FROM docker_host ORDER BY name ASC;
+
+selectDockerHostById:
+SELECT * FROM docker_host WHERE id = ?;
+
+insertDockerHost:
+INSERT INTO docker_host (name, connection_type, daemon, created_at) VALUES (?, ?, ?, ?);
+
+updateDockerHost:
+UPDATE docker_host SET name = ?, connection_type = ?, daemon = ? WHERE id = ?;
+
+deleteDockerHost:
+DELETE FROM docker_host WHERE id = ?;
+
+selectApiKeys:
+SELECT * FROM api_key ORDER BY created_at DESC;
+
+insertApiKey:
+INSERT INTO api_key (name, key_hash, prefix, active, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?);
+
+setApiKeyActive:
+UPDATE api_key SET active = ? WHERE id = ?;
+
+deleteApiKey:
+DELETE FROM api_key WHERE id = ?;
+
+lastInsertedId:
+SELECT last_insert_rowid();

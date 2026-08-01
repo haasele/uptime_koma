@@ -1,0 +1,48 @@
+CREATE TABLE tag (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT '#4B5563'
+);
+
+CREATE TABLE monitor_tag (
+    monitor_id INTEGER NOT NULL,
+    tag_id INTEGER NOT NULL,
+    value TEXT,
+    PRIMARY KEY (monitor_id, tag_id)
+);
+
+selectAllTags:
+SELECT * FROM tag ORDER BY name ASC;
+
+selectTagById:
+SELECT * FROM tag WHERE id = ?;
+
+insertTag:
+INSERT INTO tag (name, color) VALUES (?, ?);
+
+updateTag:
+UPDATE tag SET name = ?, color = ? WHERE id = ?;
+
+deleteTag:
+DELETE FROM tag WHERE id = ?;
+
+deleteTagLinks:
+DELETE FROM monitor_tag WHERE tag_id = ?;
+
+selectTagsForMonitor:
+SELECT t.id, t.name, t.color, mt.value
+FROM monitor_tag mt INNER JOIN tag t ON t.id = mt.tag_id
+WHERE mt.monitor_id = ?;
+
+selectAllMonitorTags:
+SELECT mt.monitor_id, t.id, t.name, t.color, mt.value
+FROM monitor_tag mt INNER JOIN tag t ON t.id = mt.tag_id;
+
+linkTag:
+INSERT OR REPLACE INTO monitor_tag (monitor_id, tag_id, value) VALUES (?, ?, ?);
+
+unlinkTagsForMonitor:
+DELETE FROM monitor_tag WHERE monitor_id = ?;
+
+lastInsertedId:
+SELECT last_insert_rowid();

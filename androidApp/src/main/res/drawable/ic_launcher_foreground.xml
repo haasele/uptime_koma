@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Pulse mark centered in the adaptive safe zone (inner 66dp of 108). -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,55 L42,55 L48,38 L58,72 L64,55 L78,55 L78,51 L66,51 L59,30 L47,66 L41,51 L30,51 Z" />
+</vector>
