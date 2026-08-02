@@ -101,5 +101,8 @@ Settings → Backup exports monitors, notification channels, status screens, tag
 ---
 
 ### Screenshots
+<img width="2558" height="1408" alt="image" src="https://github.com/user-attachments/assets/c287b752-2ca1-4258-9d72-1718199635dc" />
+<img width="2249" height="434" alt="image" src="https://github.com/user-attachments/assets/ac558828-b67e-4023-8c3c-9cd633cdaebd" />
+<img width="2258" height="509" alt="image" src="https://github.com/user-attachments/assets/1df82667-e205-4337-993c-29e4503cc560" />
+<img width="2258" height="509" alt="image" src="https://github.com/user-attachments/assets/decc02f8-876b-439c-b67e-e386a2f4a6dd" />
 
-![img.png](img.png)
