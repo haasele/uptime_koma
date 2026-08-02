@@ -30,9 +30,12 @@ Package:
 ```bash
 ./kotlin package -p jvm -m desktopApp -f executable-jar
 ./kotlin package -p android -m androidApp -f aab
+# or to package an apk directly
+./kotlin build -p android -m androidApp -v debug
 ```
 
 Outputs land under project-root **`build/`** (compiled classes in `build/artifacts/…`, JARs in `build/tasks/…`). Details: [docs/BUILD.md § Build outputs](docs/BUILD.md#build-outputs).
+(e.g. Android APK Output will be in build/tasks/_androidApp_buildAndroidDebug/gradle-project-debug.apk)
 
 `composeApp` is the multiplatform UI library; `desktopApp` is the desktop shell; the installable Android app comes from `androidApp`.
 
