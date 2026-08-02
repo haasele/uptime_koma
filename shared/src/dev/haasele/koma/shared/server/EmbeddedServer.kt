@@ -93,16 +93,16 @@ class EmbeddedServer(private val core: KomaCore) {
         } ?: return false
 
         val allowedHosts = hostnames.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
-        val useTls = !tlsCertificatePath.isNullOrBlank()
+        val certificatePath = tlsCertificatePath?.takeIf { it.isNotBlank() }
         return runCatching {
             val module: Application.() -> Unit = {
                 installEmbeddedRoutes(core, allowedHosts)
             }
-            val engine = if (useTls) {
+            val engine = if (certificatePath != null) {
                 HttpsEngineFactory.create(
                     host = "0.0.0.0",
                     port = bindPort,
-                    certificatePath = tlsCertificatePath!!,
+                    certificatePath = certificatePath,
                     module = module,
                 ) ?: return@runCatching false
             } else {
@@ -111,7 +111,7 @@ class EmbeddedServer(private val core: KomaCore) {
             engine.start(wait = false)
             server = engine
             runningPort = bindPort
-            runningTls = useTls
+            runningTls = certificatePath != null
             runningHostnames = allowedHosts
             true
         }.getOrElse {

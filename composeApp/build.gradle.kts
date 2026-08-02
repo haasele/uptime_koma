@@ -67,7 +67,6 @@ kotlin {
             implementation(libs.compose.material3)
             implementation(libs.compose.ui)
             implementation(libs.compose.ui.backhandler)
-            implementation(libs.compose.components.resources)
             implementation(libs.compose.material.icons.core)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.datetime)
@@ -88,4 +87,10 @@ kotlin {
             implementation(libs.androidx.appcompat)
         }
     }
+}
+
+// No composeResources/ assets and custom Amper source layout; empty Res collectors break
+// Apple compilations (ActualResourceCollectors references Res that never lands on the classpath).
+compose.resources {
+    generateResClass = never
 }
