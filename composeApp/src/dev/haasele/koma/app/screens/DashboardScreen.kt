@@ -35,6 +35,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.haasele.koma.app.ScreenMemory
+import dev.haasele.koma.app.nav.LocalNavSettled
 import dev.haasele.koma.app.theme.KomaIcons
 import dev.haasele.koma.app.theme.KomaMotion
 import dev.haasele.koma.app.theme.LocalStatusPalette
@@ -89,15 +91,20 @@ private data class DashboardInsights(
 @Composable
 fun DashboardScreen(
     core: KomaCore,
+    memory: ScreenMemory,
     onOpenMonitor: (Long) -> Unit,
     onOpenServices: () -> Unit,
     onOpenStatus: () -> Unit,
 ) {
-    val monitors by core.monitors.observeAll().collectAsState(emptyList())
-    val latest by core.heartbeats.observeLatestPerMonitor().collectAsState(emptyMap())
+    val monitors by core.monitors.observeAll().collectAsState(memory.lastMonitors.orEmpty())
+    val latest by core.heartbeats.observeLatestPerMonitor().collectAsState(memory.lastLatest)
     val running by core.engine.running.collectAsState()
     val scope = rememberCoroutineScope()
     val palette = LocalStatusPalette.current
+
+    // Persist live emissions so the next remount seeds collectAsState correctly.
+    LaunchedEffect(monitors) { memory.lastMonitors = monitors }
+    LaunchedEffect(latest) { memory.lastLatest = latest }
 
     val active = monitors.filter { it.active }
     val up = active.count { latest[it.id]?.status == MonitorStatus.UP }
@@ -111,13 +118,43 @@ fun DashboardScreen(
     val attention = active.filter { latest[it.id]?.status == MonitorStatus.DOWN }
         .sortedByDescending { latest[it.id]?.timeMs ?: 0L }
 
-    var insights by remember { mutableStateOf(DashboardInsights()) }
+    var insights by remember {
+        mutableStateOf((memory.dashboardSlot as? DashboardInsights) ?: DashboardInsights())
+    }
     var pulseSlots by remember { mutableStateOf(0) }
     val monitorKey = monitors.joinToString(",") { "${it.id}:${it.active}" }
-    val latestKey = latest.entries.joinToString(",") { "${it.key}:${it.value.status.code}:${it.value.timeMs}" }
+    // Status-only key for mix headline; timeMs must NOT trigger the heavy insights reload.
+    val statusKey = latest.entries.joinToString(",") { "${it.key}:${it.value.status.code}" }
+    val beatTimesKey = latest.entries.joinToString(",") { "${it.key}:${it.value.timeMs}" }
 
-    LaunchedEffect(monitorKey, latestKey) {
-        insights = loadDashboardInsights(core, monitors)
+    // Full insights (90-day series, stats rollups) only when the monitor set changes.
+    val navSettled = LocalNavSettled.current
+    LaunchedEffect(monitorKey, navSettled) {
+        if (!navSettled) return@LaunchedEffect
+        val cached = memory.dashboardSlot as? DashboardInsights
+        if (cached != null && memory.dashboardKey == monitorKey) {
+            insights = cached
+            return@LaunchedEffect
+        }
+        val loaded = loadDashboardInsights(core, monitors)
+        insights = loaded
+        memory.saveDashboard(monitorKey, loaded)
+    }
+    // Heartbeats: refresh beat strips / ping / events only — not the fleet daily rollup.
+    LaunchedEffect(beatTimesKey, navSettled) {
+        if (!navSettled) return@LaunchedEffect
+        if (monitors.isEmpty()) return@LaunchedEffect
+        val refreshed = refreshDashboardBeatData(core, monitors, insights)
+        insights = refreshed
+        memory.saveDashboard(monitorKey, refreshed)
+    }
+    // Keep status-sensitive lists (pulse order) in sync when only status flips.
+    LaunchedEffect(statusKey, navSettled) {
+        if (!navSettled) return@LaunchedEffect
+        if (insights.pulse.isEmpty()) return@LaunchedEffect
+        val reordered = reorderPulseByStatus(insights)
+        insights = reordered
+        memory.saveDashboard(monitorKey, reordered)
     }
 
     LazyColumn(
@@ -652,18 +689,7 @@ private suspend fun loadDashboardInsights(core: KomaCore, monitors: List<Monitor
         .take(3)
 
     // Prefer currently down / pending monitors in the pulse strip, then fill with active ones.
-    val pulse = buildList {
-        val downFirst = activePulses
-            .sortedByDescending { p ->
-                when (p.beats.lastOrNull()?.status) {
-                    MonitorStatus.DOWN -> 3
-                    MonitorStatus.PENDING -> 2
-                    MonitorStatus.MAINTENANCE -> 1
-                    else -> 0
-                }
-            }
-        addAll(downFirst.take(PULSE_ROWS))
-    }.distinctBy { it.monitor.id }
+    val pulse = reorderPulseList(activePulses)
 
     val recentEvents = activePulses
         .flatMap { pulse ->
@@ -686,6 +712,64 @@ private suspend fun loadDashboardInsights(core: KomaCore, monitors: List<Monitor
         recentEvents = recentEvents,
     )
 }
+
+/**
+ * After a heartbeat: reload recent beats for insight monitors only.
+ * Avoids re-running statsFor + dailySeries(90) on every check (the previous LaunchedEffect key bug).
+ */
+private suspend fun refreshDashboardBeatData(
+    core: KomaCore,
+    monitors: List<Monitor>,
+    previous: DashboardInsights,
+): DashboardInsights {
+    if (monitors.isEmpty()) return DashboardInsights()
+    if (previous.pulse.isEmpty() && previous.slowest.isEmpty() && previous.weakest.isEmpty()) {
+        return loadDashboardInsights(core, monitors)
+    }
+
+    suspend fun refresh(pulse: MonitorPulse): MonitorPulse {
+        val beats = core.heartbeats.recent(pulse.monitor.id, PULSE_BEATS)
+        return pulse.copy(beats = beats)
+    }
+
+    val pulse = previous.pulse.map { refresh(it) }
+    val slowest = previous.slowest.map { refresh(it) }
+    val weakest = previous.weakest.map { refresh(it) }
+    val activePulses = pulse.filter { it.monitor.active }
+    val fleetPing = averagePingSeries(activePulses.map { it.beats }, FLEET_PING_SLOTS)
+    val recentEvents = activePulses
+        .flatMap { row ->
+            core.heartbeats.important(row.monitor.id, 4).map { beat ->
+                DashboardEvent(row.monitor, beat)
+            }
+        }
+        .sortedByDescending { it.beat.timeMs }
+        .take(8)
+
+    return previous.copy(
+        fleetPing = fleetPing,
+        pulse = reorderPulseList(pulse),
+        slowest = slowest,
+        weakest = weakest,
+        recentEvents = recentEvents,
+    )
+}
+
+private fun reorderPulseByStatus(insights: DashboardInsights): DashboardInsights =
+    insights.copy(pulse = reorderPulseList(insights.pulse))
+
+private fun reorderPulseList(activePulses: List<MonitorPulse>): List<MonitorPulse> =
+    activePulses
+        .sortedByDescending { p ->
+            when (p.beats.lastOrNull()?.status) {
+                MonitorStatus.DOWN -> 3
+                MonitorStatus.PENDING -> 2
+                MonitorStatus.MAINTENANCE -> 1
+                else -> 0
+            }
+        }
+        .take(PULSE_ROWS)
+        .distinctBy { it.monitor.id }
 
 private fun mergeDailySeries(series: List<List<DailyUptime>>): List<DailyUptime> {
     if (series.isEmpty()) return emptyList()

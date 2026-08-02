@@ -63,44 +63,47 @@ object KomaMotion {
      * Screen changes:
      * - Push/Pop: horizontal
      * - Tab jumps: vertical, direction follows drawer order (down the list vs up)
+     *
+     * Offsets are intentionally a bit stronger so direction stays readable even when
+     * a frame or two drops under load.
      */
     fun screenTransition(action: NavAction): ContentTransform = when (action) {
         NavAction.Push, NavAction.Replace -> {
             (fadeIn(animationSpec = page()) + slideInHorizontally(
                 animationSpec = page(),
-                initialOffsetX = { it / 10 },
+                initialOffsetX = { it / 5 },
             )) togetherWith (fadeOut(animationSpec = quick()) + slideOutHorizontally(
                 animationSpec = page(),
-                targetOffsetX = { -it / 14 },
+                targetOffsetX = { -it / 8 },
             ))
         }
         NavAction.Pop -> {
             (fadeIn(animationSpec = page()) + slideInHorizontally(
                 animationSpec = page(),
-                initialOffsetX = { -it / 14 },
+                initialOffsetX = { -it / 8 },
             )) togetherWith (fadeOut(animationSpec = quick()) + slideOutHorizontally(
                 animationSpec = page(),
-                targetOffsetX = { it / 10 },
+                targetOffsetX = { it / 5 },
             ))
         }
         NavAction.TabDown -> {
             // Toward a lower drawer entry: new screen rises from below.
             (fadeIn(animationSpec = page()) + slideInVertically(
                 animationSpec = page(),
-                initialOffsetY = { it / 6 },
+                initialOffsetY = { it / 4 },
             )) togetherWith (fadeOut(animationSpec = quick()) + slideOutVertically(
                 animationSpec = page(),
-                targetOffsetY = { -it / 10 },
+                targetOffsetY = { -it / 6 },
             ))
         }
         NavAction.TabUp -> {
             // Toward a higher drawer entry: new screen drops in from above.
             (fadeIn(animationSpec = page()) + slideInVertically(
                 animationSpec = page(),
-                initialOffsetY = { -it / 6 },
+                initialOffsetY = { -it / 4 },
             )) togetherWith (fadeOut(animationSpec = quick()) + slideOutVertically(
                 animationSpec = page(),
-                targetOffsetY = { it / 10 },
+                targetOffsetY = { it / 6 },
             ))
         }
     }

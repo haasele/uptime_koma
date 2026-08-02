@@ -11,6 +11,7 @@ import dev.haasele.koma.shared.data.StatRepository
 import dev.haasele.koma.shared.domain.CertificateInfo
 import dev.haasele.koma.shared.domain.CheckResult
 import dev.haasele.koma.shared.domain.Heartbeat
+import dev.haasele.koma.shared.domain.Maintenance
 import dev.haasele.koma.shared.domain.Monitor
 import dev.haasele.koma.shared.domain.MonitorStatus
 import dev.haasele.koma.shared.domain.MonitorType
@@ -109,6 +110,8 @@ class MonitorEngine(
     private val runtimeStates = mutableMapOf<Long, MonitorRuntimeState>()
     private val pushTimestamps = mutableMapOf<Long, Long>()
     private val mutex = Mutex()
+    /** Avoid hydrating every maintenance window on every monitor beat. */
+    @Volatile private var maintenanceCache: Pair<Long, List<Maintenance>>? = null
 
     private val _events = MutableSharedFlow<EngineEvent>(extraBufferCapacity = 128)
     val events: SharedFlow<EngineEvent> = _events.asSharedFlow()
@@ -333,7 +336,13 @@ class MonitorEngine(
 
     private suspend fun isUnderMaintenance(monitor: Monitor): Boolean {
         val now = nowMs()
-        return maintenances.getActive().any { maintenance ->
+        val cached = maintenanceCache
+        val windows = if (cached != null && now - cached.first < MAINTENANCE_CACHE_MS) {
+            cached.second
+        } else {
+            maintenances.getActive().also { maintenanceCache = now to it }
+        }
+        return windows.any { maintenance ->
             monitor.id in maintenance.monitorIds && MaintenanceEvaluator.isUnderMaintenance(maintenance, now)
         }
     }
@@ -400,5 +409,6 @@ class MonitorEngine(
     private companion object {
         const val GRACE_MS = 5_000L
         const val RETENTION_INTERVAL_MS = 6 * 60 * 60 * 1000L
+        const val MAINTENANCE_CACHE_MS = 5_000L
     }
 }

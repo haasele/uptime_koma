@@ -64,6 +64,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.haasele.koma.app.nav.LocalNavSettled
 import dev.haasele.koma.app.theme.KomaMotion
 import dev.haasele.koma.app.theme.LocalStatusPalette
 import dev.haasele.koma.shared.data.DailyUptime
@@ -111,7 +112,8 @@ fun StatusBadge(status: MonitorStatus, active: Boolean = true) {
  * vertical capsules sized near Kuma's 5/10dp, packed so the strip fills the full width;
  * when a new beat arrives at capacity the strip slides left before settling.
  *
- * New / updated pills expand (scaleY) and tween from the empty colour into red/green.
+ * Under capacity the existing beats stretch across the full width (no gray empty pads).
+ * Only the newly appended rightmost capsule plays enter motion.
  *
  * @param maxSlots upper bound on how many capsules to render (data headroom)
  * @param onVisibleSlotsChange reports how many capsules currently fit (for dynamic titles)
@@ -138,64 +140,74 @@ fun HeartbeatBar(
             .height(barHeight.dp)
             .clip(RectangleShape),
     ) {
-        // n * w + (n - 1) * gap ≤ maxWidth  ⇒  n ≤ (maxWidth + gap) / (w + gap)
+        // Max capsules that fit at the preferred Kuma size.
         val capacity = minOf(
             maxSlots,
             maxOf(1, ((maxWidth + gap) / (preferredWidth + gap)).toInt()),
         )
-        // Absorb leftover pixels so the row spans the full width without stretching into fat dots.
-        val beatWidth = if (capacity <= 1) {
+        LaunchedEffect(capacity) { onVisibleSlotsChange(capacity) }
+
+        val visible = remember(beats, capacity) { beats.takeLast(capacity) }
+        fun beatKey(beat: Heartbeat): Long = if (beat.id != 0L) beat.id else beat.timeMs
+        val visibleKeys = remember(visible) { visible.map(::beatKey) }
+
+        // Under-filled: stretch beats across the full width (no leading empty pads).
+        // At capacity: fixed Kuma slot width + left-slide on new beats.
+        val atCapacity = visible.size >= capacity
+        val layoutSlots = when {
+            visible.isEmpty() -> capacity
+            atCapacity -> capacity
+            else -> visible.size
+        }
+        val beatWidth = if (layoutSlots <= 1) {
             maxWidth
         } else {
-            (maxWidth - gap * (capacity - 1)) / capacity
+            (maxWidth - gap * (layoutSlots - 1)) / layoutSlots
         }
         val cellPx = with(density) { (beatWidth + gap).toPx() }
         val capsule = RoundedCornerShape(beatWidth / 2)
 
-        LaunchedEffect(capacity) { onVisibleSlotsChange(capacity) }
-
-        val visible = remember(beats, capacity) { beats.takeLast(capacity) }
-        val visibleIds = remember(visible) { visible.map { it.id } }
-
-        // Kuma-style: on each new beat, temporarily render capacity+1 cells and slide left
-        // by one slot (growth into empty pads OR push oldest out at capacity).
-        var rendered by remember { mutableStateOf(visible) }
-        var emptySlots by remember {
-            mutableStateOf((capacity - visible.size).coerceAtLeast(0))
-        }
+        var priorKeys by remember { mutableStateOf<List<Long>>(emptyList()) }
+        var priorBeats by remember { mutableStateOf<List<Heartbeat>>(emptyList()) }
+        var slideBeats by remember { mutableStateOf<List<Heartbeat>?>(null) }
+        var enteringKey by remember { mutableStateOf<Long?>(null) }
         val slideOffset = remember { Animatable(0f) }
 
-        LaunchedEffect(visibleIds, capacity) {
-            val previous = rendered
-            val previousLast = previous.lastOrNull()?.id
-            val nextLast = visible.lastOrNull()?.id
-            val newBeatArrived = previous.isNotEmpty() && nextLast != null && nextLast != previousLast
+        LaunchedEffect(visibleKeys, capacity) {
+            val nextKey = visibleKeys.lastOrNull()
+            try {
+                val previous = priorBeats
+                val previousKeys = priorKeys
+                val newBeatArrived =
+                    previousKeys.isNotEmpty() && nextKey != null && nextKey != previousKeys.lastOrNull()
 
-            if (newBeatArrived) {
-                val atCapacity = previous.size >= capacity || emptySlots == 0
-                val outgoing = previous.firstOrNull()?.takeIf { beat ->
-                    atCapacity && visible.none { it.id == beat.id }
-                }
-                // Keep prior empty count while the extra cell is on the right, then slide it in.
-                val slidingEmpty = if (outgoing != null) 0 else emptySlots
-                val slidingBeats = if (outgoing != null) {
-                    listOf(outgoing) + visible.takeLast(capacity)
+                if (newBeatArrived) {
+                    enteringKey = nextKey
+                    // One-slot slide only once the strip is at capacity (Kuma push-left).
+                    if (previous.size >= capacity) {
+                        val outgoing = previous.firstOrNull()?.takeIf { beat ->
+                            visibleKeys.none { it == beatKey(beat) }
+                        }
+                        if (outgoing != null) {
+                            slideBeats = listOf(outgoing) + visible.takeLast(capacity)
+                            slideOffset.snapTo(0f)
+                            slideOffset.animateTo(-1f, animationSpec = KomaMotion.beatSlide())
+                        }
+                    }
                 } else {
-                    visible
+                    enteringKey = null
                 }
-                rendered = slidingBeats
-                emptySlots = slidingEmpty
+            } finally {
+                slideBeats = null
                 slideOffset.snapTo(0f)
-                slideOffset.animateTo(-1f, animationSpec = KomaMotion.beatSlide())
-                rendered = visible
-                emptySlots = (capacity - visible.size).coerceAtLeast(0)
-                slideOffset.snapTo(0f)
-            } else {
-                rendered = visible
-                emptySlots = (capacity - visible.size).coerceAtLeast(0)
-                slideOffset.snapTo(0f)
+                priorBeats = visible
+                priorKeys = visibleKeys
             }
         }
+
+        val displayBeats = slideBeats ?: visible
+        // Leading empty pads only when we have zero beats (reserve the track).
+        val displayEmpty = if (visible.isEmpty()) capacity else 0
 
         Row(
             Modifier
@@ -205,7 +217,7 @@ fun HeartbeatBar(
             horizontalArrangement = Arrangement.spacedBy(gap),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            repeat(emptySlots) { index ->
+            repeat(displayEmpty) { index ->
                 key("pad-$index") {
                     Box(
                         Modifier
@@ -216,14 +228,15 @@ fun HeartbeatBar(
                     )
                 }
             }
-            rendered.forEach { beat ->
-                key(beat.id) {
+            displayBeats.forEach { beat ->
+                key(beatKey(beat)) {
                     BeatCapsule(
                         targetColor = if (active) palette.colorFor(beat.status) else palette.paused,
                         emptyColor = empty,
                         beatWidth = beatWidth,
                         barHeight = barHeight,
                         shape = capsule,
+                        playEntrance = beatKey(beat) == enteringKey,
                     )
                 }
             }
@@ -239,7 +252,19 @@ private fun BeatCapsule(
     beatWidth: Dp,
     barHeight: Int,
     shape: RoundedCornerShape,
+    playEntrance: Boolean,
 ) {
+    if (!playEntrance) {
+        Box(
+            Modifier
+                .width(beatWidth)
+                .height(barHeight.dp)
+                .clip(shape)
+                .background(targetColor),
+        )
+        return
+    }
+
     var settled by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { settled = true }
     val color by animateColorAsState(
@@ -282,12 +307,20 @@ fun LatencySparkline(points: List<Float>, modifier: Modifier = Modifier) {
     }
 
     // Morph between series like Chart.js — resample on a shared X grid and lerp Y.
+    val navSettled = LocalNavSettled.current
     var fromSeries by remember { mutableStateOf(points) }
     var toSeries by remember { mutableStateOf(points) }
     val morph = remember { Animatable(1f) }
     var bootstrapped by remember { mutableStateOf(false) }
 
-    LaunchedEffect(points) {
+    LaunchedEffect(points, navSettled) {
+        if (!navSettled) {
+            fromSeries = points
+            toSeries = points
+            morph.snapTo(1f)
+            bootstrapped = true
+            return@LaunchedEffect
+        }
         if (!bootstrapped) {
             fromSeries = points
             toSeries = points

@@ -145,6 +145,7 @@ Run Compile ALL with:
 ./kotlin build -p jvm -p android -v debug -v release && \
 ./kotlin package -p jvm -m desktopApp -f executable-jar && \
 ./kotlin package -p android -m androidApp -f aab && \
+_JAVA_AWT_WM_NONREPARENTING=1 ./kotlin package -p jvm -m desktopApp -f executable-jar \
 ./gradlew :desktopApp:packageReleaseDistributionForCurrentOS \
   :desktopApp:packageLinuxAppImage \
   :desktopApp:packageFlatpak
