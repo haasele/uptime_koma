@@ -8,6 +8,10 @@ runtime: org.freedesktop.Platform
 runtime-version: '24.08'
 sdk: org.freedesktop.Sdk
 command: koma-native
+# Avoid stripping large jpackage/JVM trees (often breaks under CI / rofiles-fuse).
+build-options:
+  no-debuginfo: true
+  strip: false
 finish-args:
   - --share=network
   - --share=ipc

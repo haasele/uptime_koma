@@ -27,7 +27,7 @@ kotlin {
     }
 
     if (iosEnabled) {
-        iosX64()
+        // Compose MP 1.11+ dropped iosX64 (Apple x86_64); keep arm64 device + simulator only.
         iosArm64()
         iosSimulatorArm64()
     }
@@ -46,7 +46,8 @@ kotlin {
             kotlin.setSrcDirs(listOf("test"))
         }
 
-        val jvmAndAndroidMain by creating {
+        // Hierarchy template is off (custom jvmAndAndroidMain); wire Apple targets by hand.
+        val jvmAndAndroidMain = create("jvmAndAndroidMain") {
             dependsOn(commonMain.get())
             kotlin.setSrcDirs(listOf("src@jvmAndAndroid"))
         }
@@ -63,9 +64,16 @@ kotlin {
         }
 
         if (iosEnabled) {
-            iosMain {
+            val iosMain = create("iosMain") {
+                dependsOn(commonMain.get())
                 kotlin.setSrcDirs(listOf("src@ios"))
+                dependencies {
+                    implementation(libs.ktor.client.darwin)
+                    implementation(libs.sqldelight.driver.native)
+                }
             }
+            getByName("iosArm64Main").dependsOn(iosMain)
+            getByName("iosSimulatorArm64Main").dependsOn(iosMain)
         }
 
         commonMain.dependencies {
@@ -107,13 +115,6 @@ kotlin {
             implementation(libs.sqldelight.driver.android)
             implementation(libs.androidx.core.ktx)
             implementation(libs.androidx.work.runtime)
-        }
-
-        if (iosEnabled) {
-            iosMain.dependencies {
-                implementation(libs.ktor.client.darwin)
-                implementation(libs.sqldelight.driver.native)
-            }
         }
     }
 }

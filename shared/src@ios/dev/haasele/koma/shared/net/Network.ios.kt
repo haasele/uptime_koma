@@ -20,15 +20,10 @@ internal actual fun buildHttpClient(spec: HttpClientSpec): HttpClient = HttpClie
         configureRequest {
             setTimeoutInterval(spec.timeoutMs / 1000.0)
         }
-        if (spec.ignoreTls) {
-            handleChallenge { _, _, challenge, completionHandler ->
-                val trust = challenge.protectionSpace.serverTrust
-                completionHandler(
-                    platform.Foundation.NSURLSessionAuthChallengeDisposition.NSURLSessionAuthChallengeUseCredential,
-                    trust?.let { platform.Foundation.NSURLCredential.credentialForTrust(it) },
-                )
-            }
-        }
+        // ignoreTls is intentionally a no-op on Apple platforms: Kotlin/Native's current
+        // Foundation/Security bindings no longer expose NSURLProtectionSpace.serverTrust /
+        // NSURLCredential factories needed for a ChallengeHandler (they still exist in ObjC,
+        // but are unresolved at Kotlin compile time). JVM/Android keep full ignore-TLS support.
     }
 
     install(HttpTimeout) {

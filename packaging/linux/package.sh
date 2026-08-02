@@ -162,7 +162,15 @@ EOF
 
   rm -rf "$build_dir" "$repo_dir"
   mkdir -p "$export_dir"
-  flatpak-builder --force-clean --repo="$repo_dir" "$build_dir" "$gen_manifest"
+  # --disable-rofiles-fuse: required in many CI/container hosts where FUSE is unavailable.
+  # --user: keep the build under the runner account (no system install).
+  flatpak-builder \
+    --user \
+    --force-clean \
+    --disable-rofiles-fuse \
+    --repo="$repo_dir" \
+    "$build_dir" \
+    "$gen_manifest"
   flatpak build-bundle "$repo_dir" "${export_dir}/${APP_ID}.flatpak" "$APP_ID"
   echo "Wrote ${export_dir}/${APP_ID}.flatpak"
   echo "Install with: flatpak install --user ${export_dir}/${APP_ID}.flatpak"

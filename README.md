@@ -14,6 +14,8 @@ A native rewrite of [Uptime Kuma](https://github.com/louislam/uptime-kuma) as a 
 
 Full command list and output paths: **[docs/BUILD.md](docs/BUILD.md)**.
 
+**Nightly builds:** every push runs [`.github/workflows/nightly.yml`](.github/workflows/nightly.yml), which packages Linux (Deb/RPM/AppImage/Flatpak/JAR), macOS (DMG), Windows (MSI), and Android, then uploads them as the floating **`nightly`** prerelease.
+
 Build with the Kotlin Toolchain (`./kotlin`):
 
 ```bash

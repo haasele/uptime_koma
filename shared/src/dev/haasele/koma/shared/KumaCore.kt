@@ -23,6 +23,7 @@ import dev.haasele.koma.shared.notify.LocalNotifier
 import dev.haasele.koma.shared.notify.LocalNotifierHolder
 import dev.haasele.koma.shared.notify.NotificationDispatcher
 import dev.haasele.koma.shared.server.EmbeddedServer
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -107,15 +108,17 @@ class KomaCore(
      * Starts the engine and, where the platform allows it, the push and metrics endpoints.
      * Safe to call from Activity and Service — only the first caller does the work.
      */
-    suspend fun start() = startMutex.withLock {
-        if (started) return
-        val configuration = settings.get()
-        if (configuration.startEngineOnLaunch) engine.start()
-        if (configuration.embeddedServerEnabled && Platform.supportsEmbeddedServer) {
-            // Port conflicts must never abort the app; push/metrics simply stay offline.
-            embeddedServer.start(configuration.embeddedServerPort)
+    suspend fun start() {
+        startMutex.withLock {
+            if (started) return
+            val configuration = settings.get()
+            if (configuration.startEngineOnLaunch) engine.start()
+            if (configuration.embeddedServerEnabled && Platform.supportsEmbeddedServer) {
+                // Port conflicts must never abort the app; push/metrics simply stay offline.
+                embeddedServer.start(configuration.embeddedServerPort)
+            }
+            started = true
         }
-        started = true
     }
 
     suspend fun shutdown() {

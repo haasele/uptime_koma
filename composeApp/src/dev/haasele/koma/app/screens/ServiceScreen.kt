@@ -43,6 +43,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.haasele.koma.app.SERVICE_BEAT_LIMIT
+import dev.haasele.koma.app.ScreenMemory
+import dev.haasele.koma.app.nav.LocalNavSettled
 import dev.haasele.koma.app.theme.KomaIcons
 import dev.haasele.koma.app.theme.KomaMotion
 import dev.haasele.koma.app.ui.ClickableRow
@@ -71,6 +74,7 @@ private enum class StatusFilter(val label: String) {
 @Composable
 fun ServiceScreen(
     core: KomaCore,
+    memory: ScreenMemory,
     onOpenMonitor: (Long) -> Unit,
     onCreateMonitor: () -> Unit,
 ) {
@@ -82,10 +86,23 @@ fun ServiceScreen(
     var query by remember { mutableStateOf("") }
     var statusFilter by remember { mutableStateOf(StatusFilter.ALL) }
     var tagFilter by remember { mutableStateOf<Long?>(null) }
-    var beatsByMonitor by remember { mutableStateOf<Map<Long, List<Heartbeat>>>(emptyMap()) }
+    val monitorIds = remember(monitors) { monitors.map { it.id }.toSet() }
 
-    LaunchedEffect(monitors.size, latest) {
-        beatsByMonitor = monitors.associate { it.id to core.heartbeats.recent(it.id, 200) }
+    // Same refresh path as Dashboard pulse rows: reload recent() when a beat lands.
+    val navSettled = LocalNavSettled.current
+    LaunchedEffect(latest, monitorIds, navSettled) {
+        if (!navSettled) return@LaunchedEffect
+        memory.pruneServiceBeats(monitorIds)
+        for ((id, beat) in latest) {
+            if (id !in monitorIds) continue
+            if (!memory.hasServiceBeats(id)) continue
+            if (memory.serviceTime(id) == beat.timeMs) continue
+            memory.putServiceBeats(
+                id,
+                core.heartbeats.recent(id, SERVICE_BEAT_LIMIT),
+                beat.timeMs,
+            )
+        }
     }
 
     val filtered = monitors.filter { monitor ->
@@ -168,10 +185,22 @@ fun ServiceScreen(
             }
 
             items(filtered, key = { it.id }) { monitor ->
+                val beat = latest[monitor.id]
+                // Initial history load when the row enters the viewport (Dashboard-style recent()).
+                LaunchedEffect(monitor.id, navSettled) {
+                    if (!navSettled) return@LaunchedEffect
+                    if (memory.hasServiceBeats(monitor.id)) return@LaunchedEffect
+                    val beats = core.heartbeats.recent(monitor.id, SERVICE_BEAT_LIMIT)
+                    memory.putServiceBeats(
+                        monitor.id,
+                        beats,
+                        beat?.timeMs ?: beats.lastOrNull()?.timeMs ?: 0L,
+                    )
+                }
                 MonitorRow(
                     monitor = monitor,
-                    beats = beatsByMonitor[monitor.id].orEmpty(),
-                    latest = latest[monitor.id],
+                    beats = memory.serviceBeats(monitor.id),
+                    latest = beat,
                     onOpen = { onOpenMonitor(monitor.id) },
                     onTogglePause = {
                         scope.launch {
@@ -179,7 +208,7 @@ fun ServiceScreen(
                             core.engine.syncMonitor(monitor.id)
                         }
                     },
-                    modifier = Modifier.animateItem(),
+                    modifier = if (navSettled) Modifier.animateItem() else Modifier,
                 )
             }
         }
@@ -286,7 +315,12 @@ private fun MonitorRow(
                 }
             }
             Spacer(Modifier.height(10.dp))
-            HeartbeatBar(beats, Modifier.fillMaxWidth(), barHeight = 22, active = monitor.active)
+            HeartbeatBar(
+                beats = beats,
+                modifier = Modifier.fillMaxWidth(),
+                barHeight = 18,
+                active = monitor.active,
+            )
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text(

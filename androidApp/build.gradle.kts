@@ -23,8 +23,10 @@ android {
     // Amper / Kotlin Toolchain Android layout
     sourceSets.getByName("main") {
         manifest.srcFile("src/AndroidManifest.xml")
-        res.srcDirs("res")
-        resources.srcDirs("resources")
+        res.directories.clear()
+        res.directories.add("res")
+        resources.directories.clear()
+        resources.directories.add("resources")
     }
 }
 

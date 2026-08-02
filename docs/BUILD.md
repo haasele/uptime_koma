@@ -145,6 +145,7 @@ Run Compile ALL with:
 ./kotlin build -p jvm -p android -v debug -v release && \
 ./kotlin package -p jvm -m desktopApp -f executable-jar && \
 ./kotlin package -p android -m androidApp -f aab && \
+_JAVA_AWT_WM_NONREPARENTING=1 ./kotlin package -p jvm -m desktopApp -f executable-jar \
 ./gradlew :desktopApp:packageReleaseDistributionForCurrentOS \
   :desktopApp:packageLinuxAppImage \
   :desktopApp:packageFlatpak
@@ -164,3 +165,19 @@ Find everything under:
 | Flatpak                        | `desktopApp/build/compose/binaries/main-release/flatpak/dev.haasele.KomaNative.flatpak`     |
 
 No Deb — `dpkg-deb` is missing on my Arch system. DMG/MSI only getting created on MacOS/Windows.
+
+---
+
+## Nightly GitHub Release
+
+Workflow: [`.github/workflows/nightly.yml`](../.github/workflows/nightly.yml).
+
+On **every push** (and `workflow_dispatch`) it builds:
+
+| Runner | Artifacts |
+| --- | --- |
+| Ubuntu | Deb, RPM, AppImage, Flatpak, executable JAR, Android APK/AAB |
+| macOS | DMG (+ optional iOS simulator framework zip) |
+| Windows | MSI |
+
+Successful runs force-update the floating tag **`nightly`** and replace the **prerelease** GitHub Release of the same name (`…/releases/tag/nightly`). Asset names look like `UptimeKoma-nightly-<run>-<sha>-…`.

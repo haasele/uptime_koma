@@ -28,7 +28,8 @@ kotlin {
     }
 
     if (iosEnabled) {
-        listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach { target ->
+        // Compose MP 1.11+ dropped iosX64 (Apple x86_64); keep arm64 device + simulator only.
+        listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
             target.binaries.framework {
                 baseName = "KomaApp"
                 isStatic = true
@@ -50,9 +51,13 @@ kotlin {
             kotlin.setSrcDirs(listOf("src@android"))
         }
         if (iosEnabled) {
-            iosMain {
+            // Hierarchy template is off project-wide; connect iosMain to Apple compilations.
+            val iosMain = create("iosMain") {
+                dependsOn(commonMain.get())
                 kotlin.setSrcDirs(listOf("src@ios"))
             }
+            getByName("iosArm64Main").dependsOn(iosMain)
+            getByName("iosSimulatorArm64Main").dependsOn(iosMain)
         }
 
         commonMain.dependencies {
@@ -62,7 +67,6 @@ kotlin {
             implementation(libs.compose.material3)
             implementation(libs.compose.ui)
             implementation(libs.compose.ui.backhandler)
-            implementation(libs.compose.components.resources)
             implementation(libs.compose.material.icons.core)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.datetime)
@@ -83,4 +87,10 @@ kotlin {
             implementation(libs.androidx.appcompat)
         }
     }
+}
+
+// No composeResources/ assets and custom Amper source layout; empty Res collectors break
+// Apple compilations (ActualResourceCollectors references Res that never lands on the classpath).
+compose.resources {
+    generateResClass = never
 }

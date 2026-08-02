@@ -89,12 +89,22 @@ fun MonitorDetailScreen(
     var confirmDelete by remember { mutableStateOf(false) }
     var manualNote by remember { mutableStateOf("") }
 
-    LaunchedEffect(monitorId, beats.size, daySlots) {
+    val lastBeatMs = beats.lastOrNull()?.timeMs
+
+    // Heavy rollups (daily series, cert) only when the monitor or day window changes —
+    // not on every heartbeat (beats.size previously re-ran this whole block each check).
+    LaunchedEffect(monitorId, daySlots) {
         monitor = core.monitors.getById(monitorId)
         stats = core.uptime.statsFor(monitorId)
         events = core.heartbeats.important(monitorId, 30)
         daily = core.stats.dailySeries(monitorId, daySlots)
         certificate = core.engine.certificateFor(monitorId)
+    }
+    // Light refresh when a new beat arrives: stats + event list only.
+    LaunchedEffect(lastBeatMs) {
+        if (lastBeatMs == null) return@LaunchedEffect
+        stats = core.uptime.statsFor(monitorId)
+        events = core.heartbeats.important(monitorId, 30)
     }
 
     val current = monitor ?: return

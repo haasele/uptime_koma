@@ -1,6 +1,7 @@
 package dev.haasele.koma.app
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -38,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -53,8 +55,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.haasele.koma.app.nav.LocalNavSettled
 import dev.haasele.koma.app.nav.Navigator
 import dev.haasele.koma.app.nav.Screen
+import dev.haasele.koma.app.nav.resolveNavAction
+import dev.haasele.koma.app.nav.screenContentKey
 import dev.haasele.koma.app.remote.RemoteSession
 import dev.haasele.koma.app.screens.DashboardScreen
 import dev.haasele.koma.app.screens.LoadingScreen
@@ -133,6 +138,7 @@ private val tabEntries = listOf(
 @Composable
 private fun MainShell(core: KomaCore, session: AppSession) {
     val navigator = remember { Navigator() }
+    val screenMemory = remember { ScreenMemory() }
     val scope = rememberCoroutineScope()
     val remoteSession = remember { RemoteSession(core, scope) }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -193,7 +199,7 @@ private fun MainShell(core: KomaCore, session: AppSession) {
                 },
             ) { padding ->
                 Box(Modifier.fillMaxSize().padding(padding)) {
-                    ScreenContent(core, session, navigator, remoteSession)
+                    ScreenContent(core, session, navigator, remoteSession, screenMemory)
                 }
             }
         }
@@ -267,79 +273,121 @@ private fun ScreenContent(
     session: AppSession,
     navigator: Navigator,
     remoteSession: RemoteSession,
+    memory: ScreenMemory,
 ) {
+    val frame = navigator.frame
     AnimatedContent(
-        targetState = navigator.current,
-        transitionSpec = { KomaMotion.screenTransition(navigator.lastAction) },
+        targetState = frame,
+        transitionSpec = {
+            val action = resolveNavAction(
+                from = initialState.screen,
+                to = targetState.screen,
+                recorded = targetState.action,
+            )
+            KomaMotion.screenTransition(action)
+        },
         label = "screen-content",
         modifier = Modifier.fillMaxSize(),
-    ) { screen ->
-        when (screen) {
-            Screen.Dashboard -> DashboardScreen(
-                core = core,
-                onOpenMonitor = { navigator.push(Screen.MonitorDetail(it)) },
-                onOpenServices = { navigator.selectTab(Screen.Services) },
-                onOpenStatus = { navigator.selectTab(Screen.StatusScreens) },
-            )
-
-            Screen.Services -> ServiceScreen(
-                core = core,
-                onOpenMonitor = { navigator.push(Screen.MonitorDetail(it)) },
-                onCreateMonitor = { navigator.push(Screen.MonitorEditor(null)) },
-            )
-
-            Screen.StatusScreens -> StatusPageListScreen(
-                core = core,
-                onOpen = { navigator.push(Screen.StatusPageViewer(it)) },
-                onEdit = { navigator.push(Screen.StatusPageEditor(it)) },
-            )
-
-            Screen.Notifications -> NotificationsScreen(core)
-
-            Screen.Maintenance -> MaintenanceScreen(core)
-
-            Screen.Settings -> SettingsScreen(
-                core = core,
-                session = session,
-                onOpenRemoteConsole = { navigator.push(Screen.RemoteConsole) },
-            )
-
-            Screen.RemoteConsole -> RemoteConsoleScreen(remoteSession)
-
-            is Screen.MonitorDetail -> MonitorDetailScreen(
-                core = core,
-                monitorId = screen.monitorId,
-                onEdit = { navigator.push(Screen.MonitorEditor(it)) },
-                onBack = { navigator.pop() },
-            )
-
-            is Screen.MonitorEditor -> MonitorEditorScreen(
-                core = core,
-                monitorId = screen.monitorId,
-                parentId = screen.parentId,
-                onSaved = { id ->
-                    navigator.pop()
-                    if (screen.monitorId == null) navigator.push(Screen.MonitorDetail(id))
-                },
-                onCancel = { navigator.pop() },
-            )
-
-            is Screen.StatusPageEditor -> StatusPageEditorScreen(
-                core = core,
-                pageId = screen.pageId,
-                onSaved = { id ->
-                    navigator.pop()
-                    if (screen.pageId == null) navigator.push(Screen.StatusPageViewer(id))
-                },
-                onCancel = { navigator.pop() },
-            )
-
-            is Screen.StatusPageViewer -> StatusPageViewerScreen(
-                core = core,
-                pageId = screen.pageId,
-                onEdit = { navigator.push(Screen.StatusPageEditor(it)) },
-            )
+        contentKey = { screenContentKey(it.screen) },
+    ) { target ->
+        val settled = transition.currentState == EnterExitState.Visible &&
+            transition.targetState == EnterExitState.Visible
+        CompositionLocalProvider(LocalNavSettled provides settled) {
+            when (val screen = target.screen) {
+                is Screen.Tab -> TabScreen(screen, core, session, navigator, memory)
+                else -> DetailScreen(screen, core, navigator, remoteSession)
+            }
         }
+    }
+}
+
+@Composable
+private fun TabScreen(
+    tab: Screen.Tab,
+    core: KomaCore,
+    session: AppSession,
+    navigator: Navigator,
+    memory: ScreenMemory,
+) {
+    when (tab) {
+        Screen.Dashboard -> DashboardScreen(
+            core = core,
+            memory = memory,
+            onOpenMonitor = { navigator.push(Screen.MonitorDetail(it)) },
+            onOpenServices = { navigator.selectTab(Screen.Services) },
+            onOpenStatus = { navigator.selectTab(Screen.StatusScreens) },
+        )
+
+        Screen.Services -> ServiceScreen(
+            core = core,
+            memory = memory,
+            onOpenMonitor = { navigator.push(Screen.MonitorDetail(it)) },
+            onCreateMonitor = { navigator.push(Screen.MonitorEditor(null)) },
+        )
+
+        Screen.StatusScreens -> StatusPageListScreen(
+            core = core,
+            onOpen = { navigator.push(Screen.StatusPageViewer(it)) },
+            onEdit = { navigator.push(Screen.StatusPageEditor(it)) },
+        )
+
+        Screen.Notifications -> NotificationsScreen(core)
+
+        Screen.Maintenance -> MaintenanceScreen(core)
+
+        Screen.Settings -> SettingsScreen(
+            core = core,
+            session = session,
+            onOpenRemoteConsole = { navigator.push(Screen.RemoteConsole) },
+        )
+    }
+}
+
+@Composable
+private fun DetailScreen(
+    screen: Screen,
+    core: KomaCore,
+    navigator: Navigator,
+    remoteSession: RemoteSession,
+) {
+    when (screen) {
+        is Screen.Tab -> Unit
+
+        Screen.RemoteConsole -> RemoteConsoleScreen(remoteSession)
+
+        is Screen.MonitorDetail -> MonitorDetailScreen(
+            core = core,
+            monitorId = screen.monitorId,
+            onEdit = { navigator.push(Screen.MonitorEditor(it)) },
+            onBack = { navigator.pop() },
+        )
+
+        is Screen.MonitorEditor -> MonitorEditorScreen(
+            core = core,
+            monitorId = screen.monitorId,
+            parentId = screen.parentId,
+            onSaved = { id ->
+                navigator.pop()
+                if (screen.monitorId == null) navigator.push(Screen.MonitorDetail(id))
+            },
+            onCancel = { navigator.pop() },
+        )
+
+        is Screen.StatusPageEditor -> StatusPageEditorScreen(
+            core = core,
+            pageId = screen.pageId,
+            onSaved = { id ->
+                navigator.pop()
+                if (screen.pageId == null) navigator.push(Screen.StatusPageViewer(id))
+            },
+            onCancel = { navigator.pop() },
+        )
+
+        is Screen.StatusPageViewer -> StatusPageViewerScreen(
+            core = core,
+            pageId = screen.pageId,
+            onEdit = { navigator.push(Screen.StatusPageEditor(it)) },
+        )
     }
 }
 

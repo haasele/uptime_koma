@@ -1,0 +1,261 @@
+name: Nightly
+
+# Builds installers for all desktop targets (+ Android) on every push and
+# publishes / refreshes the floating `nightly` GitHub prerelease.
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  # One nightly pipeline at a time so the floating tag/release is not raced.
+  group: nightly-release
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  JAVA_VERSION: '21'
+
+jobs:
+  meta:
+    name: Meta
+    runs-on: ubuntu-latest
+    outputs:
+      short_sha: ${{ steps.vars.outputs.short_sha }}
+      stamp: ${{ steps.vars.outputs.stamp }}
+      prefix: ${{ steps.vars.outputs.prefix }}
+    steps:
+      - id: vars
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          STAMP="$(date -u +%Y-%m-%dT%H:%MZ)"
+          PREFIX="UptimeKoma-nightly-${{ github.run_number }}-${SHORT_SHA}"
+          {
+            echo "short_sha=${SHORT_SHA}"
+            echo "stamp=${STAMP}"
+            echo "prefix=${PREFIX}"
+          } >> "$GITHUB_OUTPUT"
+
+  linux:
+    name: Linux + Android
+    needs: meta
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install Linux packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            dpkg-dev fakeroot rpm \
+            flatpak flatpak-builder \
+            desktop-file-utils || true
+          # fuse libs differ by Ubuntu version (24.04 uses libfuse2t64)
+          sudo apt-get install -y --no-install-recommends libfuse2t64 \
+            || sudo apt-get install -y --no-install-recommends libfuse2 \
+            || true
+
+          curl -fsSL -o /tmp/appimagetool \
+            "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x /tmp/appimagetool
+          sudo mv /tmp/appimagetool /usr/local/bin/appimagetool
+          echo "APPIMAGE_EXTRACT_AND_RUN=1" >> "$GITHUB_ENV"
+
+          command -v dpkg-deb
+          command -v rpmbuild
+          command -v appimagetool
+          command -v flatpak-builder
+
+      - name: Package desktop (Deb, RPM, AppImage)
+        env:
+          _JAVA_AWT_WM_NONREPARENTING: '1'
+        run: |
+          # Deb/Rpm are registered only when dpkg-deb / rpmbuild are on PATH
+          # (installed above). DistributionForCurrentOS builds whatever is enabled.
+          ./gradlew --no-daemon \
+            :desktopApp:packageReleaseDistributionForCurrentOS \
+            :desktopApp:packageLinuxAppImage
+          test -n "$(find desktopApp/build/compose/binaries/main-release -type f \
+            \( -name '*.deb' -o -name '*.rpm' \) 2>/dev/null | head -n1)"
+          test -n "$(find desktopApp/build/compose/binaries/main-release/appimage -type f \
+            -name '*.AppImage' 2>/dev/null | head -n1)"
+
+      - name: Package Flatpak
+        env:
+          _JAVA_AWT_WM_NONREPARENTING: '1'
+        run: |
+          ./gradlew --no-daemon :desktopApp:packageFlatpak
+          test -n "$(find desktopApp/build/compose/binaries/main-release/flatpak -type f \
+            -name '*.flatpak' 2>/dev/null | head -n1)"
+
+      - name: Package executable JAR (Kotlin Toolchain)
+        run: |
+          export KOTLIN_CLI_NO_WELCOME_BANNER=1
+          ./kotlin package -p jvm -m desktopApp -f executable-jar
+
+      - name: Package Android APK / AAB
+        run: |
+          export KOTLIN_CLI_NO_WELCOME_BANNER=1
+          ./kotlin package -p android -m androidApp -f aab || true
+          ./gradlew --no-daemon \
+            :androidApp:assembleDebug \
+            :androidApp:assembleRelease \
+            :androidApp:bundleRelease || \
+          ./gradlew --no-daemon :androidApp:assembleDebug
+
+      - name: Collect artifacts
+        run: |
+          chmod +x scripts/ci-collect-nightly.sh
+          scripts/ci-collect-nightly.sh dist "${{ needs.meta.outputs.prefix }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nightly-linux
+          path: dist/*
+          if-no-files-found: error
+
+  macos:
+    name: macOS
+    needs: meta
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Package DMG
+        run: ./gradlew --no-daemon :desktopApp:packageReleaseDmg
+
+      - name: Zip iOS simulator framework (optional)
+        continue-on-error: true
+        run: |
+          ./gradlew --no-daemon \
+            :composeApp:linkReleaseFrameworkIosSimulatorArm64 \
+            -Pkoma.enableIos=true
+          FRAME="$(find composeApp/build -type d -name 'KomaApp.framework' | head -n1 || true)"
+          if [ -z "$FRAME" ]; then
+            echo "No KomaApp.framework found; skipping"
+            exit 0
+          fi
+          mkdir -p dist-ios
+          OUT="dist-ios/${{ needs.meta.outputs.prefix }}-ios-framework-simulator-arm64.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$FRAME" "$OUT"
+          ls -lah "$OUT"
+
+      - name: Collect artifacts
+        run: |
+          chmod +x scripts/ci-collect-nightly.sh
+          scripts/ci-collect-nightly.sh dist "${{ needs.meta.outputs.prefix }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nightly-macos
+          path: dist/*
+          if-no-files-found: error
+
+  windows:
+    name: Windows
+    needs: meta
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Package MSI
+        run: ./gradlew --no-daemon :desktopApp:packageReleaseMsi
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          chmod +x scripts/ci-collect-nightly.sh
+          scripts/ci-collect-nightly.sh dist "${{ needs.meta.outputs.prefix }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nightly-windows
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish nightly prerelease
+    needs: [meta, linux, macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: nightly-*
+          merge-multiple: true
+
+      - name: Stage release files
+        run: |
+          mkdir -p dist
+          find artifacts -type f -exec cp -f {} dist/ \;
+          ls -lah dist
+          test "$(find dist -type f | wc -l)" -gt 0
+
+      - name: Move floating nightly tag + publish prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -f nightly "${GITHUB_SHA}"
+          git push origin refs/tags/nightly --force
+
+          NOTES_FILE="$(mktemp)"
+          cat > "$NOTES_FILE" <<EOF
+          Automated **nightly** prerelease from \`${GITHUB_SHA}\` (\`${GITHUB_REF_NAME}\`).
+
+          | | |
+          | --- | --- |
+          | Commit | \`${GITHUB_SHA}\` |
+          | Branch | \`${GITHUB_REF_NAME}\` |
+          | Run | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+          | Built (UTC) | ${{ needs.meta.outputs.stamp }} |
+
+          Assets are replaced on every successful push. Builds are **not** production-signed / notarized.
+          EOF
+
+          if gh release view nightly >/dev/null 2>&1; then
+            gh release delete nightly --yes || true
+            git tag -f nightly "${GITHUB_SHA}"
+            git push origin refs/tags/nightly --force
+          fi
+
+          gh release create nightly \
+            --prerelease \
+            --title "Nightly ${{ needs.meta.outputs.stamp }} (${{ needs.meta.outputs.short_sha }})" \
+            --notes-file "$NOTES_FILE" \
+            --target "${GITHUB_SHA}" \
+            dist/*

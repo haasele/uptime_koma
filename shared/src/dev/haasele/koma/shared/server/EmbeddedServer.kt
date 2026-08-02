@@ -27,15 +27,19 @@ import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlinx.coroutines.launch
 
 /**
  * The always-on HTTP(S) surface: push receivers, Prometheus metrics, a JSON view of status
  * screens and the WebSocket channel a remote UI connects to.
  */
+@OptIn(ExperimentalAtomicApi::class)
 class EmbeddedServer(private val core: KomaCore) {
 
-    private val lock = Any()
+    // JVM `synchronized` is not available in common/Native; spin-lock is enough for rare start/stop.
+    private val locked = AtomicBoolean(false)
     private var server: KtorEmbeddedServer<*, *>? = null
     private var runningPort: Int? = null
     private var runningTls: Boolean = false
@@ -45,6 +49,17 @@ class EmbeddedServer(private val core: KomaCore) {
     val port: Int? get() = runningPort
     val isTls: Boolean get() = runningTls
     val hostnames: List<String> get() = runningHostnames
+
+    private inline fun <T> withServerLock(block: () -> T): T {
+        while (!locked.compareAndSet(expectedValue = false, newValue = true)) {
+            // wait for the other start/stop call
+        }
+        try {
+            return block()
+        } finally {
+            locked.store(false)
+        }
+    }
 
     /** Human-readable URLs for Settings / logs (CLI hostnames or local discovery). */
     fun advertisedUrls(): List<String> {
@@ -69,7 +84,7 @@ class EmbeddedServer(private val core: KomaCore) {
         port: Int,
         tlsCertificatePath: String? = null,
         hostnames: List<String> = emptyList(),
-    ): Boolean = synchronized(lock) {
+    ): Boolean = withServerLock {
         if (server != null) return true
         if (!Platform.supportsEmbeddedServer) return false
 
@@ -78,16 +93,16 @@ class EmbeddedServer(private val core: KomaCore) {
         } ?: return false
 
         val allowedHosts = hostnames.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
-        val useTls = !tlsCertificatePath.isNullOrBlank()
+        val certificatePath = tlsCertificatePath?.takeIf { it.isNotBlank() }
         return runCatching {
             val module: Application.() -> Unit = {
                 installEmbeddedRoutes(core, allowedHosts)
             }
-            val engine = if (useTls) {
+            val engine = if (certificatePath != null) {
                 HttpsEngineFactory.create(
                     host = "0.0.0.0",
                     port = bindPort,
-                    certificatePath = tlsCertificatePath!!,
+                    certificatePath = certificatePath,
                     module = module,
                 ) ?: return@runCatching false
             } else {
@@ -96,11 +111,11 @@ class EmbeddedServer(private val core: KomaCore) {
             engine.start(wait = false)
             server = engine
             runningPort = bindPort
-            runningTls = useTls
+            runningTls = certificatePath != null
             runningHostnames = allowedHosts
             true
         }.getOrElse {
-            System.err.println("koma: embedded server failed to start: ${it.message}")
+            println("koma: embedded server failed to start: ${it.message}")
             server = null
             runningPort = null
             runningTls = false
@@ -109,7 +124,7 @@ class EmbeddedServer(private val core: KomaCore) {
         }
     }
 
-    fun stop() = synchronized(lock) {
+    fun stop() = withServerLock {
         runCatching { server?.stop(gracePeriodMillis = 500, timeoutMillis = 2_000) }
         server = null
         runningPort = null
