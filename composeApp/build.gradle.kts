@@ -28,7 +28,8 @@ kotlin {
     }
 
     if (iosEnabled) {
-        listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach { target ->
+        // Compose MP 1.11+ dropped iosX64 (Apple x86_64); keep arm64 device + simulator only.
+        listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
             target.binaries.framework {
                 baseName = "KomaApp"
                 isStatic = true

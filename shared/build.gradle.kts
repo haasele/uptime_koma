@@ -27,7 +27,7 @@ kotlin {
     }
 
     if (iosEnabled) {
-        iosX64()
+        // Compose MP 1.11+ dropped iosX64 (Apple x86_64); keep arm64 device + simulator only.
         iosArm64()
         iosSimulatorArm64()
     }

@@ -89,6 +89,7 @@ class EmbeddedServerTest {
     @Test
     fun `metrics expose every monitor`() = runBlocking {
         awaitServer()
+        core.settings.save(core.settings.get().copy(metricsEnabled = true))
         core.monitors.save(
             Monitor(
                 name = "metric target",
