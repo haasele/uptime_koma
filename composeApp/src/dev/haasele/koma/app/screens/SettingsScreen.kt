@@ -64,6 +64,8 @@ import dev.haasele.koma.app.ui.SwitchRow
 import dev.haasele.koma.shared.KomaCore
 import dev.haasele.koma.shared.core.Autostart
 import dev.haasele.koma.shared.core.Platform
+import dev.haasele.koma.shared.core.PlatformKind
+import dev.haasele.koma.shared.core.openAppNotificationSettings
 import dev.haasele.koma.shared.crypto.Totp
 import dev.haasele.koma.shared.crypto.randomToken
 import dev.haasele.koma.shared.domain.AppSettings
@@ -166,6 +168,22 @@ fun SettingsScreen(core: KomaCore, session: AppSession, onOpenRemoteConsole: () 
                     "Keep heartbeats for (days)",
                     helper = "0 keeps everything; pruning runs every six hours",
                 )
+                if (Platform.kind == PlatformKind.ANDROID) {
+                    SectionTitle("Notifications")
+                    Text(
+                        "Background monitoring and monitor alerts use separate Android notification " +
+                            "categories, so you can mute the persistent status icon without silencing up/down alerts — or the other way around.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { openAppNotificationSettings() },
+                        shape = RoundedCornerShape(10.dp),
+                    ) {
+                        Text("Open notification settings")
+                    }
+                }
                 if (!Platform.supportsLongRunningEngine) {
                     Text(
                         "This platform suspends background work aggressively. Checks run while the app is " +

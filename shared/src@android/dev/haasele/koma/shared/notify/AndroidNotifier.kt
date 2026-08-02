@@ -1,6 +1,5 @@
 package dev.haasele.koma.shared.notify
 
-import android.app.NotificationChannel as SystemNotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
@@ -10,24 +9,25 @@ import kotlin.random.Random
 
 class AndroidNotifier(private val context: Context) : LocalNotifier {
 
-    private val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
     init {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(
-                SystemNotificationChannel(CHANNEL_ID, "Monitor status", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                    description = "Alerts when a monitor goes up or down"
-                },
-            )
-        }
+        AndroidNotificationChannels.ensure(context)
     }
 
     override suspend fun notify(title: String, message: String, level: NotificationLevel) {
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val manager = NotificationManagerCompat.from(context)
+        if (!manager.areNotificationsEnabled()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = context.getSystemService(NotificationManager::class.java)
+                ?.getNotificationChannel(AndroidNotificationChannels.ALERTS_ID)
+            if (channel != null && channel.importance == NotificationManager.IMPORTANCE_NONE) return
+        }
+
+        val notification = NotificationCompat.Builder(context, AndroidNotificationChannels.ALERTS_ID)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setContentTitle(title)
             .setContentText(message.lineSequence().firstOrNull() ?: message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setPriority(
                 when (level) {
                     NotificationLevel.ERROR -> NotificationCompat.PRIORITY_HIGH
@@ -38,10 +38,6 @@ class AndroidNotifier(private val context: Context) : LocalNotifier {
             .setAutoCancel(true)
             .build()
 
-        runCatching { NotificationManagerCompat.from(context).notify(Random.nextInt(), notification) }
-    }
-
-    private companion object {
-        const val CHANNEL_ID = "koma_monitor_status"
+        runCatching { manager.notify(Random.nextInt(1, Int.MAX_VALUE), notification) }
     }
 }

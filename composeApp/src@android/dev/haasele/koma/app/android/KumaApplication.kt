@@ -5,6 +5,8 @@ import android.content.Context
 import android.util.Log
 import dev.haasele.koma.shared.KomaCore
 import dev.haasele.koma.shared.data.AndroidDatabaseDriverFactory
+import dev.haasele.koma.shared.notify.AndroidAppContext
+import dev.haasele.koma.shared.notify.AndroidNotificationChannels
 import dev.haasele.koma.shared.notify.AndroidNotifier
 import kotlinx.coroutines.Dispatchers
 import java.net.BindException
@@ -21,6 +23,8 @@ class KomaApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        AndroidAppContext.install(this)
+        AndroidNotificationChannels.ensure(this)
         // Ktor may surface BindException on a worker thread outside our scopes; keep the UI alive.
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
