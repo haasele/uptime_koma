@@ -115,7 +115,7 @@ class EmbeddedServer(private val core: KomaCore) {
             runningHostnames = allowedHosts
             true
         }.getOrElse {
-            System.err.println("koma: embedded server failed to start: ${it.message}")
+            println("koma: embedded server failed to start: ${it.message}")
             server = null
             runningPort = null
             runningTls = false

@@ -35,6 +35,7 @@ import dev.haasele.koma.shared.engine.executors.TcpPortExecutor
 import dev.haasele.koma.shared.engine.executors.WebSocketExecutor
 import dev.haasele.koma.shared.net.HttpClientProvider
 import dev.haasele.koma.shared.notify.NotificationDispatcher
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job

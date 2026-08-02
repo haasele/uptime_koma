@@ -77,7 +77,7 @@ jobs:
           command -v appimagetool
           command -v flatpak-builder
 
-      - name: Package desktop (Deb, RPM, AppImage, Flatpak)
+      - name: Package desktop (Deb, RPM, AppImage)
         env:
           _JAVA_AWT_WM_NONREPARENTING: '1'
         run: |
@@ -85,12 +85,17 @@ jobs:
           # (installed above). DistributionForCurrentOS builds whatever is enabled.
           ./gradlew --no-daemon \
             :desktopApp:packageReleaseDistributionForCurrentOS \
-            :desktopApp:packageLinuxAppImage \
-            :desktopApp:packageFlatpak
+            :desktopApp:packageLinuxAppImage
           test -n "$(find desktopApp/build/compose/binaries/main-release -type f \
             \( -name '*.deb' -o -name '*.rpm' \) 2>/dev/null | head -n1)"
           test -n "$(find desktopApp/build/compose/binaries/main-release/appimage -type f \
             -name '*.AppImage' 2>/dev/null | head -n1)"
+
+      - name: Package Flatpak
+        env:
+          _JAVA_AWT_WM_NONREPARENTING: '1'
+        run: |
+          ./gradlew --no-daemon :desktopApp:packageFlatpak
           test -n "$(find desktopApp/build/compose/binaries/main-release/flatpak -type f \
             -name '*.flatpak' 2>/dev/null | head -n1)"
 

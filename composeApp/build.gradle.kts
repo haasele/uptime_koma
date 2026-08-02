@@ -51,9 +51,13 @@ kotlin {
             kotlin.setSrcDirs(listOf("src@android"))
         }
         if (iosEnabled) {
-            iosMain {
+            // Hierarchy template is off project-wide; connect iosMain to Apple compilations.
+            val iosMain = create("iosMain") {
+                dependsOn(commonMain.get())
                 kotlin.setSrcDirs(listOf("src@ios"))
             }
+            getByName("iosArm64Main").dependsOn(iosMain)
+            getByName("iosSimulatorArm64Main").dependsOn(iosMain)
         }
 
         commonMain.dependencies {

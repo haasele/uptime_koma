@@ -23,6 +23,7 @@ import dev.haasele.koma.shared.notify.LocalNotifier
 import dev.haasele.koma.shared.notify.LocalNotifierHolder
 import dev.haasele.koma.shared.notify.NotificationDispatcher
 import dev.haasele.koma.shared.server.EmbeddedServer
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
