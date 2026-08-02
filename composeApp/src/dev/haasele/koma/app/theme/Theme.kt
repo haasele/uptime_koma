@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
@@ -151,6 +152,10 @@ private fun colorSchemeFor(theme: String, accent: Color): ColorScheme = when (th
 /** Resolved Material colour scheme for the given design prefs (e.g. AWT window chrome). */
 fun resolveKomaColorScheme(themePreference: String, accentHex: String): ColorScheme =
     colorSchemeFor(ThemeIds.normalize(themePreference), parseAccent(accentHex))
+
+/** Window / AWT backdrop as ARGB — usable from modules that do not depend on Material3. */
+fun resolveKomaBackgroundArgb(themePreference: String, accentHex: String): Int =
+    resolveKomaColorScheme(themePreference, accentHex).background.toArgb()
 
 /** Brand surfaces: accent drives primary and lightly tints the whole chrome. */
 private fun brandScheme(base: ColorScheme, accent: Color, dark: Boolean): ColorScheme {

@@ -28,6 +28,7 @@ kotlin {
                 implementation(compose.desktop.currentOs)
                 implementation(libs.kotlinx.coroutines.swing)
                 implementation(libs.slf4j.simple)
+                implementation(libs.dorkbox.systemtray)
             }
         }
     }
@@ -43,9 +44,16 @@ compose.desktop {
             "-Dskiko.renderApi=SOFTWARE",
         )
 
+        // Netty / dorkbox / Skiko pull in hundreds of optional classes ProGuard treats as errors.
+        // Desktop installers do not need shrinking here; disable until dedicated keep/dontwarn rules exist.
+        buildTypes.release.proguard {
+            isEnabled.set(false)
+        }
+
         nativeDistributions {
+            // AppImage is built by :packageLinuxAppImage (appimagetool + AppRun), not Compose's
+            // TargetFormat.AppImage — both would fight over main-release/app.
             val formats = mutableListOf(
-                TargetFormat.AppImage,
                 TargetFormat.Dmg,
                 TargetFormat.Msi,
             )
@@ -74,9 +82,12 @@ compose.desktop {
     }
 }
 
-val packageLinuxAppImage by tasks.registering(Exec::class) {
+val releaseBinariesDir = layout.buildDirectory.dir("compose/binaries/main-release")
+val releaseAppDir = releaseBinariesDir.map { it.dir("app") }
+
+tasks.register<Exec>("packageLinuxAppImage") {
     group = "distribution"
-    description = "Builds a portable .AppImage (needs appimagetool on PATH)"
+    description = "Builds a portable .AppImage via appimagetool (needs appimagetool on PATH)"
     onlyIf {
         val ok = org.gradle.internal.os.OperatingSystem.current().isLinux && toolOnPath("appimagetool")
         if (!ok && org.gradle.internal.os.OperatingSystem.current().isLinux) {
@@ -84,14 +95,17 @@ val packageLinuxAppImage by tasks.registering(Exec::class) {
         }
         ok
     }
-    dependsOn("createDistributable")
+    dependsOn("createReleaseDistributable")
+    // Compose packageRelease* tasks also touch main-release/; finish them first when requested together.
+    mustRunAfter(tasks.matching { it.name.startsWith("packageRelease") })
     workingDir = rootProject.projectDir
+    environment("BINARIES_DIR", releaseBinariesDir.get().asFile.absolutePath)
     commandLine("bash", "packaging/linux/package.sh", "appimage")
-    inputs.dir(layout.buildDirectory.dir("compose/binaries/main/app"))
-    outputs.dir(layout.buildDirectory.dir("compose/binaries/main/appimage"))
+    inputs.dir(releaseAppDir)
+    outputs.dir(releaseBinariesDir.map { it.dir("appimage") })
 }
 
-val packageFlatpak by tasks.registering(Exec::class) {
+tasks.register<Exec>("packageFlatpak") {
     group = "distribution"
     description = "Builds a Flatpak bundle (needs flatpak + flatpak-builder on PATH)"
     onlyIf {
@@ -106,11 +120,14 @@ val packageFlatpak by tasks.registering(Exec::class) {
         }
         ok
     }
-    dependsOn("createDistributable")
+    dependsOn("createReleaseDistributable")
+    mustRunAfter(tasks.matching { it.name.startsWith("packageRelease") })
+    mustRunAfter("packageLinuxAppImage")
     workingDir = rootProject.projectDir
+    environment("BINARIES_DIR", releaseBinariesDir.get().asFile.absolutePath)
     commandLine("bash", "packaging/linux/package.sh", "flatpak")
-    inputs.dir(layout.buildDirectory.dir("compose/binaries/main/app"))
-    outputs.dir(layout.buildDirectory.dir("compose/binaries/main/flatpak"))
+    inputs.dir(releaseAppDir)
+    outputs.dir(releaseBinariesDir.map { it.dir("flatpak") })
 }
 
 tasks.withType<JavaExec>().configureEach {

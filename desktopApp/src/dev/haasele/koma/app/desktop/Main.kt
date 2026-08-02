@@ -15,7 +15,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.configureSwingGlobalsForCompose
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpSize
@@ -26,7 +25,7 @@ import androidx.compose.ui.window.rememberWindowState
 import dev.haasele.koma.app.KomaApp
 import dev.haasele.koma.app.screens.BootSplashScreen
 import dev.haasele.koma.app.theme.KomaMotion
-import dev.haasele.koma.app.theme.resolveKomaColorScheme
+import dev.haasele.koma.app.theme.resolveKomaBackgroundArgb
 import dev.haasele.koma.shared.CliManagedServer
 import dev.haasele.koma.shared.KomaCore
 import dev.haasele.koma.shared.core.DesktopPaths
@@ -42,6 +41,7 @@ import kotlin.math.max
 import kotlin.system.measureTimeMillis
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
@@ -83,13 +83,13 @@ private fun runWindowed(cli: DesktopCli) = application {
     var visible by remember { mutableStateOf(true) }
     var trayReady by remember { mutableStateOf(false) }
     val windowState = rememberWindowState(size = DpSize(1100.dp, 720.dp))
-    val settings by (core?.settings?.observe() ?: kotlinx.coroutines.flow.flowOf(AppSettings()))
+    val settings by (core?.settings?.observe() ?: flowOf(AppSettings()))
         .collectAsState(AppSettings())
     val backdropArgb = remember(settings.theme, settings.accentColor, core == null) {
         if (core == null) {
-            resolveKomaColorScheme("dark", "#2DD4A7").background.toArgb()
+            resolveKomaBackgroundArgb("dark", "#2DD4A7")
         } else {
-            resolveKomaColorScheme(settings.theme, settings.accentColor).background.toArgb()
+            resolveKomaBackgroundArgb(settings.theme, settings.accentColor)
         }
     }
 

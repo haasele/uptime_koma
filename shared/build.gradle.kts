@@ -99,6 +99,8 @@ kotlin {
 
         jvmMain.dependencies {
             implementation(libs.sqldelight.driver.sqlite)
+            // HTTPS for --https / embedded TLS (CIO has no sslConnector on JVM).
+            implementation(libs.ktor.server.netty)
         }
 
         androidMain.dependencies {

@@ -133,3 +133,34 @@ Stale windows: `pkill -f 'dev.haasele.koma'`.
 ```
 
 Requires an Android SDK (`ANDROID_HOME` / `ANDROID_SDK_ROOT` / `local.properties`).
+
+
+---
+
+TLDR
+
+Run Compile ALL with:
+
+```bash
+./kotlin build -p jvm -p android -v debug -v release && \
+./kotlin package -p jvm -m desktopApp -f executable-jar && \
+./kotlin package -p android -m androidApp -f aab && \
+./gradlew :desktopApp:packageReleaseDistributionForCurrentOS \
+  :desktopApp:packageLinuxAppImage \
+  :desktopApp:packageFlatpak
+```
+
+Find everything under:
+
+| File                           | Path                                                                                        |
+|--------------------------------|---------------------------------------------------------------------------------------------|
+| Desktop executable JAR         | `build/tasks/_desktopApp_executableJarJvm/desktopApp-jvm-executable.jar`                    |
+| Android Debug-APK              | `build/tasks/_androidApp_buildAndroidDebug/gradle-project-debug.apk`                        |
+| Android Release-APK (unsigned) | `build/tasks/_androidApp_buildAndroidRelease/gradle-project-release-unsigned.apk`           |
+| Android Release-AAB            | `build/tasks/_androidApp_bundleAndroid/gradle-project-release.aab`                          |
+| jpackage-App (ausgepackt)      | `desktopApp/build/compose/binaries/main-release/app/koma-native/`                           |
+| RPM                            | `desktopApp/build/compose/binaries/main-release/rpm/koma-native-1.0.0-1.x86_64.rpm`         |
+| AppImage                       | `desktopApp/build/compose/binaries/main-release/appimage/koma-native-1.0.0-x86_64.AppImage` |
+| Flatpak                        | `desktopApp/build/compose/binaries/main-release/flatpak/dev.haasele.KomaNative.flatpak`     |
+
+No Deb — `dpkg-deb` is missing on my Arch system. DMG/MSI only getting created on MacOS/Windows.

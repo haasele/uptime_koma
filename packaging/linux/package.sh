@@ -144,7 +144,7 @@ cmd_flatpak() {
 Type=Application
 Name=Uptime Koma
 Comment=Native uptime monitoring
-Exec=${APP_ID}
+Exec=koma-native
 Icon=${APP_ID}
 Categories=Network;Monitor;System;
 Terminal=false

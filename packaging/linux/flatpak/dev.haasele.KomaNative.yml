@@ -1,5 +1,8 @@
 # Staging path / launcher name substituted by packaging/linux/package.sh
 # (__STAGING_DIR__, __APP_LAUNCHER__).
+#
+# Keep app-id / desktop / icon names in sync with package.sh APP_ID
+# (dev.haasele.KomaNative).
 app-id: dev.haasele.KomaNative
 runtime: org.freedesktop.Platform
 runtime-version: '24.08'
