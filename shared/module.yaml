@@ -1,0 +1,56 @@
+product:
+  type: kmp/lib
+  platforms: [jvm, android, iosArm64, iosSimulatorArm64]
+
+aliases:
+  - jvmAndAndroid: [jvm, android]
+
+dependencies:
+  - org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0
+  - org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0
+  - org.jetbrains.kotlinx:kotlinx-datetime:0.8.0
+  - io.ktor:ktor-client-core:3.5.2
+  - io.ktor:ktor-client-websockets:3.5.2
+  - io.ktor:ktor-client-content-negotiation:3.5.2
+  - io.ktor:ktor-serialization-kotlinx-json:3.5.2
+  - io.ktor:ktor-network:3.5.2
+  - io.ktor:ktor-network-tls:3.5.2
+  - io.ktor:ktor-server-core:3.5.2
+  - io.ktor:ktor-server-cio:3.5.2
+  - io.ktor:ktor-server-websockets:3.5.2
+  - io.ktor:ktor-server-content-negotiation:3.5.2
+  - app.cash.sqldelight:runtime:2.3.2: exported
+  - app.cash.sqldelight:coroutines-extensions:2.3.2: exported
+
+dependencies@jvmAndAndroid:
+  - io.ktor:ktor-client-cio:3.5.2
+
+dependencies@jvm:
+  - app.cash.sqldelight:sqlite-driver:2.3.2
+  - io.ktor:ktor-server-netty:3.5.2
+
+dependencies@android:
+  - app.cash.sqldelight:android-driver:2.3.2
+  - androidx.core:core-ktx:1.16.0
+  - androidx.work:work-runtime-ktx:2.10.3
+
+dependencies@ios:
+  - io.ktor:ktor-client-darwin:3.5.2
+  - app.cash.sqldelight:native-driver:2.3.2
+
+test-dependencies:
+  - org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0
+
+settings:
+  kotlin:
+    version: 2.3.21
+    freeCompilerArgs: [ -Xexpect-actual-classes ]
+    serialization:
+      format: json
+      version: 1.11.0
+  jvm:
+    release: 17
+  android:
+    compileSdk: 36
+    minSdk: 26
+    namespace: dev.haasele.koma.shared

@@ -1,0 +1,18 @@
+product: android/app
+
+dependencies:
+  - ../composeApp
+  - androidx.appcompat:appcompat:1.7.1
+
+settings:
+  kotlin:
+    version: 2.3.21
+  compose:
+    enabled: true
+    version: 1.11.1
+  android:
+    namespace: dev.haasele.koma.android
+    applicationId: dev.haasele.koma
+    compileSdk: 36
+    minSdk: 26
+    targetSdk: 36

@@ -1,0 +1,20 @@
+product: jvm/app
+
+dependencies:
+  - ../composeApp
+  - ../shared
+  - $compose.desktop.currentOs
+  - org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.11.0
+  - org.slf4j:slf4j-simple:2.0.18
+  # Wayland/modern Linux: AWT SystemTray is XEmbed-only; AppIndicator speaks StatusNotifierItem.
+  - com.dorkbox:SystemTray:4.4
+
+settings:
+  kotlin:
+    version: 2.3.21
+  compose:
+    enabled: true
+    version: 1.11.1
+  jvm:
+    release: 17
+    mainClass: dev.haasele.koma.app.desktop.DesktopLauncher

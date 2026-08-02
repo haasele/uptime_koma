@@ -1,0 +1,43 @@
+product:
+  type: kmp/lib
+  platforms: [jvm, android, iosArm64, iosSimulatorArm64]
+
+dependencies:
+  - ../shared
+  - $compose.foundation: exported
+  - org.jetbrains.compose.material3:material3:1.9.0: exported
+  - $compose.ui: exported
+  - $compose.components.resources: exported
+  - org.jetbrains.compose.material:material-icons-core:1.7.3
+  - org.jetbrains.compose.ui:ui-backhandler:1.11.1
+  - org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0
+  - org.jetbrains.kotlinx:kotlinx-datetime:0.8.0
+  - org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0
+
+dependencies@android:
+  - androidx.activity:activity-compose:1.10.1
+  - androidx.core:core-ktx:1.16.0
+  - androidx.lifecycle:lifecycle-runtime-ktx:2.9.4
+  - androidx.biometric:biometric:1.1.0
+  - androidx.fragment:fragment-ktx:1.8.6
+  - androidx.appcompat:appcompat:1.7.1
+
+test-dependencies:
+  - org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0
+
+settings:
+  kotlin:
+    version: 2.3.21
+    freeCompilerArgs: [ -Xexpect-actual-classes ]
+    serialization:
+      format: json
+      version: 1.11.0
+  compose:
+    enabled: true
+    version: 1.11.1
+  jvm:
+    release: 17
+  android:
+    compileSdk: 36
+    minSdk: 26
+    namespace: dev.haasele.koma.app

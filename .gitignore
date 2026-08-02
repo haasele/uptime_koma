@@ -5,6 +5,7 @@ local.properties
 .idea/
 *.iml
 .kotlin/
+.cache/
 .DS_Store
 captures/
 xcuserdata/

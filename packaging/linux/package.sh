@@ -4,14 +4,14 @@
 #   packaging/linux/package.sh appimage
 #   packaging/linux/package.sh flatpak
 #
-# Requires :composeApp:createDistributable first.
+# Requires :desktopApp:createDistributable first.
 # Wayland/Java AWT is handled in-process (WaylandAwtBootstrap) and via Flatpak
 # finish-args — no extra launcher shell scripts are emitted into the build tree.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 VERSION="${APP_VERSION:-1.0.0}"
-BINARIES_DIR="${BINARIES_DIR:-$ROOT/composeApp/build/compose/binaries/main}"
+BINARIES_DIR="${BINARIES_DIR:-$ROOT/desktopApp/build/compose/binaries/main}"
 ICON_SRC="${ICON_SRC:-$ROOT/packaging/linux/dev.haasele.KomaNative.png}"
 SLUG="koma-native"
 APP_ID="dev.haasele.KomaNative"
@@ -38,7 +38,7 @@ find_app_dir() {
   done
   shopt -u nullglob
   if [ "$count" -ne 1 ]; then
-    echo "Expected exactly one directory under ${BINARIES_DIR}/app (run :composeApp:createDistributable first). Found ${count}." >&2
+    echo "Expected exactly one directory under ${BINARIES_DIR}/app (run :desktopApp:createDistributable first). Found ${count}." >&2
     exit 1
   fi
   app_name="$(basename "$app_dir")"
@@ -126,12 +126,12 @@ cmd_flatpak() {
   find_app_dir
   restore_native_launcher "$app_dir"
 
-  local staging="$ROOT/composeApp/build/flatpak-staging"
-  local build_dir="$ROOT/composeApp/build/flatpak-build"
-  local repo_dir="$ROOT/composeApp/build/flatpak-repo"
+  local staging="$ROOT/desktopApp/build/flatpak-staging"
+  local build_dir="$ROOT/desktopApp/build/flatpak-build"
+  local repo_dir="$ROOT/desktopApp/build/flatpak-repo"
   local export_dir="${BINARIES_DIR}/flatpak"
   local manifest="$ROOT/packaging/linux/flatpak/dev.haasele.KomaNative.yml"
-  local gen_manifest="$ROOT/composeApp/build/flatpak-manifest.yml"
+  local gen_manifest="$ROOT/desktopApp/build/flatpak-manifest.yml"
 
   rm -rf "$staging"
   mkdir -p "$staging/app" "$staging/share/applications" "$staging/share/icons/hicolor/256x256/apps"

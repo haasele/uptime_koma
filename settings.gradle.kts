@@ -29,6 +29,7 @@ dependencyResolutionManagement {
 
 include(":shared")
 include(":composeApp")
+include(":desktopApp")
 
 // The Android application shell is only wired in when an SDK is available.
 if (System.getenv("ANDROID_HOME") != null ||

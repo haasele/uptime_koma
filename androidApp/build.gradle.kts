@@ -19,6 +19,13 @@ android {
             isMinifyEnabled = false
         }
     }
+
+    // Amper / Kotlin Toolchain Android layout
+    sourceSets.getByName("main") {
+        manifest.srcFile("src/AndroidManifest.xml")
+        res.srcDirs("res")
+        resources.srcDirs("resources")
+    }
 }
 
 dependencies {

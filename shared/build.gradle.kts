@@ -1,3 +1,4 @@
+import java.io.File
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -35,15 +36,37 @@ kotlin {
         freeCompilerArgs.add("-Xexpect-actual-classes")
     }
 
-    // Desktop and Android share the JVM networking stack (CIO engine, InetAddress, JSSE).
-    // Wire this with explicit dependsOn: the hierarchy-template android matcher is unreliable
-    // with the AGP 9 `android {}` target.
     sourceSets {
-        val jvmCommonMain by creating {
-            dependsOn(getByName("commonMain"))
+        // Amper / Kotlin Toolchain layout
+        commonMain {
+            kotlin.setSrcDirs(listOf("src"))
+            resources.setSrcDirs(emptyList<String>())
         }
-        getByName("jvmMain").dependsOn(jvmCommonMain)
-        getByName("androidMain").dependsOn(jvmCommonMain)
+        commonTest {
+            kotlin.setSrcDirs(listOf("test"))
+        }
+
+        val jvmAndAndroidMain by creating {
+            dependsOn(commonMain.get())
+            kotlin.setSrcDirs(listOf("src@jvmAndAndroid"))
+        }
+        jvmMain {
+            dependsOn(jvmAndAndroidMain)
+            kotlin.setSrcDirs(listOf("src@jvm"))
+        }
+        androidMain {
+            dependsOn(jvmAndAndroidMain)
+            kotlin.setSrcDirs(listOf("src@android"))
+        }
+        jvmTest {
+            kotlin.setSrcDirs(listOf("test@jvm"))
+        }
+
+        if (iosEnabled) {
+            iosMain {
+                kotlin.setSrcDirs(listOf("src@ios"))
+            }
+        }
 
         commonMain.dependencies {
             implementation(libs.kotlinx.coroutines.core)
@@ -70,7 +93,7 @@ kotlin {
             implementation(libs.kotlinx.coroutines.test)
         }
 
-        jvmCommonMain.dependencies {
+        jvmAndAndroidMain.dependencies {
             implementation(libs.ktor.client.cio)
         }
 
@@ -97,7 +120,34 @@ sqldelight {
     databases {
         create("KomaDatabase") {
             packageName.set("dev.haasele.koma.shared.db")
+            srcDirs("sqldelight")
             generateAsync.set(false)
         }
     }
+}
+
+// Generated interfaces are committed under src/ for Kotlin Toolchain.
+// Keep Gradle codegen as a sync helper; do not compile the build/ copy (duplicates).
+afterEvaluate {
+    kotlin.sourceSets.configureEach {
+        val filtered = kotlin.srcDirs.filterNot { dir ->
+            dir.path.contains("generated${File.separator}sqldelight") ||
+                dir.path.contains("generated/sqldelight")
+        }
+        kotlin.setSrcDirs(filtered)
+    }
+}
+
+tasks.register<Copy>("syncSqlDelightToSrc") {
+    group = "build"
+    description = "Copy SQLDelight generated Kotlin into shared/src for Toolchain"
+    dependsOn("generateCommonMainKomaDatabaseInterface")
+    from(layout.buildDirectory.dir("generated/sqldelight/code/KomaDatabase/commonMain"))
+    into(layout.projectDirectory.dir("src"))
+}
+
+tasks.register("syncSqlDelight") {
+    group = "build"
+    description = "Regenerate SQLDelight and sync into shared/src"
+    dependsOn("syncSqlDelightToSrc")
 }

@@ -1,218 +1,135 @@
 # Build & packaging
 
-Commands run from the repository root via `./gradlew`.
+Build system: **Kotlin Toolchain** (`./kotlin` / `./kotlin.bat`).  
 Package version is **1.0.0**. There is **no web target**.
 
 | Module | Role |
 | --- | --- |
-| `:shared` | Engine, DB, notifications, embedded server |
-| `:composeApp` | Shared UI (Desktop JVM + Android library) + desktop packaging |
-| `:androidApp` | Installable Android APK / AAB shell |
+| `shared` | Engine, DB, notifications, embedded server (`kmp/lib`) |
+| `composeApp` | Shared Compose UI library (`kmp/lib`) |
+| `desktopApp` | Desktop JVM app (`jvm/app`) |
+| `androidApp` | Installable Android APK / AAB shell (`android/app`) |
 
-iOS Kotlin (`iosMain`) exists; there is **no** `iosApp` / Xcode project in this repo yet.
+iOS Kotlin (`src@ios`) exists; there is **no** `ios/app` / Xcode project in this repo yet.
+
+Sources use the **Amper layout** (`src/`, `src@jvm/`, `src@android/`, `src@ios/`, `src@jvmAndAndroid/`).
 
 ---
 
 ## Quick map
 
-| Goal | Command | Output |
-| --- | --- | --- |
-| Desktop UI | `:composeApp:run` | live process |
-| Headless engine | `:composeApp:run --args='--headless --port 3001'` | live process |
-| Linux AppImage | `:composeApp:packageLinuxAppImage` | `composeApp/build/compose/binaries/main/appimage/*.AppImage` |
-| Flatpak | `:composeApp:packageFlatpak` | `composeApp/build/compose/binaries/main/flatpak/*.flatpak` |
-| Unpacked desktop app | `:composeApp:createDistributable` | `composeApp/build/compose/binaries/main/app/koma-native/` |
-| Uber JAR | `:composeApp:packageUberJarForCurrentOS` | `composeApp/build/compose/jars/*.jar` |
-| Android debug APK | `:androidApp:assembleDebug` | `androidApp/build/outputs/apk/debug/` |
-| Shared tests | `:shared:jvmTest` | `shared/build/reports/tests/jvmTest/` |
+| Goal | Command |
+| --- | --- |
+| Build JVM apps/libs | `./kotlin build -p jvm` |
+| Build Android | `./kotlin build -p android` |
+| Desktop UI | `_JAVA_AWT_WM_NONREPARENTING=1 ./kotlin run -m desktopApp` |
+| Headless / web service | `./kotlin run -m desktopApp -- --nogui --port 3001` |
+| Shared tests | `./kotlin test -p jvm -m shared` |
+| Clean | `./kotlin clean` |
 
 ```bash
-./gradlew :shared:jvmTest :composeApp:compileKotlinJvm :androidApp:assembleDebug
+./kotlin build -p jvm -m shared -m composeApp -m desktopApp
+./kotlin test -p jvm -m shared
 ```
+
+Install the CLI globally if needed: `curl -fsSL https://kotl.in/install.sh | sh`  
+Repo wrappers: `./kotlin` / `./kotlin.bat` (created via `kotlin update --create`).
 
 ---
 
-## Compile / check
+## Build outputs
 
-| Task | Purpose |
+All Toolchain outputs live under the project-root **`build/`** directory  
+(override with `--build-dir=<path>`).
+
+| Kind | Path |
 | --- | --- |
-| `:shared:compileKotlinJvm` | Shared JVM |
-| `:shared:compileAndroidMain` | Shared Android |
-| `:composeApp:compileKotlinJvm` | Desktop UI |
-| `:composeApp:compileAndroidMain` | Android UI library |
-| `:androidApp:compileDebugKotlin` | Android app module |
-| `:shared:jvmTest` / `:shared:allTests` | Tests |
-| `:composeApp:assemble` / `:androidApp:assemble` | Assemble outputs |
+| Compiled classes (JVM) | `build/artifacts/CompiledJvmArtifact/<module><platform>/kotlin-output/` |
+| Module JARs (task products) | `build/tasks/_<module>_jarJvm/<module>-jvm.jar` |
+| Logs | `build/logs/` |
+| Reports / temp | `build/reports/`, `build/temp/` |
+
+Examples after `./kotlin build -p jvm`:
+
+- `build/artifacts/CompiledJvmArtifact/sharedjvm/`
+- `build/artifacts/CompiledJvmArtifact/composeAppjvm/`
+- `build/artifacts/CompiledJvmArtifact/desktopAppjvm/`
+- `build/tasks/_desktopApp_jarJvm/desktopApp-jvm.jar`
+
+To run the app you normally do **not** need those paths: use `./kotlin run -m desktopApp`.
 
 ---
 
-## Desktop — run
+## Packaging
 
-| Task | Notes |
-| --- | --- |
-| `:composeApp:run` | Dev UI. Wayland env via Gradle + `WaylandAwtBootstrap`. |
-| `:composeApp:run --args='--headless --port 3001'` | Engine only |
-| `:composeApp:runDistributable` | Runs the `createDistributable` tree |
-| `:composeApp:runRelease` / `runReleaseDistributable` | Release variants |
+```bash
+# Desktop JVM JAR / executable JAR
+./kotlin package -p jvm -m desktopApp -f jar
+./kotlin package -p jvm -m desktopApp -f executable-jar
 
-Stale windows: `pkill -f 'dev.haasele.koma'`.
+# Android App Bundle (release by default; use -v debug for debug)
+./kotlin package -p android -m androidApp -f aab
+```
+
+Supported `-f` formats: `jar`, `executable-jar`, `aab`, `maven-central-bundle`.  
+Packaged artifacts are written under `build/` (same build root as compile outputs).
+
+Legacy Linux AppImage / Flatpak helpers under [`packaging/linux/`](../packaging/linux/) expected a Compose Desktop jpackage tree that is no longer produced by the Toolchain workflow. Prefer `executable-jar` (or rework those scripts against Toolchain outputs) until native desktop installers are wired again.
 
 ---
 
-## Desktop — packaging
+## SQLDelight
 
-**Repo tooling** (one script only):
+`.sq` sources live in [`shared/sqldelight/`](../shared/sqldelight/).  
+Generated Kotlin is **committed** under `shared/src/…/shared/db/` so `./kotlin build` needs no separate codegen step.
 
-```text
-packaging/linux/
-├── package.sh                 # appimage | flatpak
-├── dev.haasele.KomaNative.png
-└── flatpak/dev.haasele.KomaNative.yml
-```
+After editing `.sq` files, regenerate the committed sources under `shared/src/dev/haasele/koma/shared/db/` and commit them.
 
-Build outputs are native binaries / installers — **no companion `.sh` launchers** are written next to JARs or into `app/bin/`.
-AppImage still contains the required `AppRun` entrypoint (AppImage format); Flatpak uses the jpackage ELF plus `finish-args` env.
+---
 
-**Artifact root:** `composeApp/build/compose/binaries/main/`  
-Release: `…/binaries/main-release/`
+## Desktop CLI (JAR / binary / AppImage / Flatpak)
 
-| Task | Host / tools | Output |
-| --- | --- | --- |
-| `:composeApp:createDistributable` | any desktop OS | `…/app/koma-native/` · `bin/koma-native` (jpackage ELF) |
-| `:composeApp:packageAppImage` | Compose `TargetFormat.AppImage` = **jpackage app dir**, not a real `.AppImage` | same under `…/app/` |
-| `:composeApp:packageLinuxAppImage` | Linux + `appimagetool` | `…/appimage/koma-native-1.0.0-<arch>.AppImage` |
-| `:composeApp:packageFlatpak` | Linux + `flatpak` + `flatpak-builder` | `…/flatpak/dev.haasele.KomaNative.flatpak` |
-| `:composeApp:packageUberJarForCurrentOS` | any desktop OS | `composeApp/build/compose/jars/koma-native-<os>-<arch>-1.0.0.jar` |
-| `:composeApp:packageRpm` | Linux + `rpmbuild` (if on `PATH`) | `…/rpm/*.rpm` |
-| `:composeApp:packageDeb` | Linux + `dpkg-deb` (if on `PATH`) | `…/deb/*.deb` |
-| `:composeApp:packageDmg` | macOS | `…/dmg/*.dmg` |
-| `:composeApp:packageMsi` | Windows + WiX | `…/msi/*.msi` |
-| `:composeApp:packageDistributionForCurrentOS` | current OS | formats for this host |
-| `:composeApp:package` | — | Compose umbrella task |
+All desktop entry points share the same flags (`DesktopLauncher`):
 
 ```bash
-./gradlew :composeApp:createDistributable
-packaging/linux/package.sh appimage   # same as :packageLinuxAppImage
-packaging/linux/package.sh flatpak    # same as :packageFlatpak
+koma-native --help
+koma-native --nogui --port 3001
+koma-native --port 8443 --https /etc/koma/keystore.p12
+koma-native --nogui --http --port 3001 --debug
 ```
 
-### AppImage
-
-Prefer **`:composeApp:packageLinuxAppImage`**. Without FUSE:
-
-```bash
-APPIMAGE_EXTRACT_AND_RUN=1 composeApp/build/compose/binaries/main/appimage/koma-native-1.0.0-$(uname -m).AppImage
-```
-
-### Flatpak
-
-```bash
-./gradlew :composeApp:packageFlatpak
-flatpak install --user composeApp/build/compose/binaries/main/flatpak/dev.haasele.KomaNative.flatpak
-```
-
-### Uber JAR
-
-```bash
-java -jar composeApp/build/compose/jars/koma-native-linux-x64-1.0.0.jar
-```
-
-On Linux/Wayland the entry point (`DesktopLauncher`) re-execs once with
-`_JAVA_AWT_WM_NONREPARENTING=1` in the real process environment (AWT ignores
-in-process env-map hacks). You should see a short `koma-desktop: re-exec …` line
-on stderr, then the UI.
-
-### Flatpak / AppImage tooling
-
-| Task | Skipped unless |
+| Flag | Meaning |
 | --- | --- |
-| `:packageLinuxAppImage` | `appimagetool` on `PATH` |
-| `:packageFlatpak` | `flatpak` **and** `flatpak-builder` on `PATH` |
+| `--nogui`, `--headless` | No GUI; engine + embedded API |
+| `--port <n>` | Listen port; implies `--nogui` |
+| `--http` | Cleartext HTTP (default in nogui mode) |
+| `--https <cert>` | HTTPS via PKCS12 or PEM (+ `key.pem`); password: `KOMA_HTTPS_PASSWORD` |
+| `--hostname <list>` | Comma-separated DNS names (Host allowlist + advertised URLs) |
+| `--debug` | slf4j DEBUG + engine beat logs |
+| `-h`, `--help` | Help text |
 
-```bash
-# Arch / CachyOS
-sudo pacman -S appimagetool flatpak flatpak-builder
-```
+AppImage/`AppRun` and Flatpak `command: koma-native` forward `"$@"` unchanged. For Flatpak HTTPS, grant the cert path (`flatpak run --filesystem=host:ro …`).
 
 ---
 
 ## Wayland (niri / xwayland-satellite)
 
-Java AWT needs `_JAVA_AWT_WM_NONREPARENTING=1` before toolkit init
-([niri Application Issues](https://github.com/niri-wm/niri/wiki/Application-Issues)).
+Java AWT needs `_JAVA_AWT_WM_NONREPARENTING=1` in the **native** process environment before AWT init.
 
-Applied by:
+- `./kotlin run -m desktopApp` — export the env yourself (or rely on `WaylandAwtBootstrap` + `DesktopLauncher` re-exec)
+- Packaged apps — in-process bootstrap
 
-1. `DesktopLauncher` — re-exec with a real process env when the flag is missing (`java -jar`)
-2. `WaylandAwtBootstrap` — in-process map update (best-effort)
-3. Gradle `JavaExec` / `:composeApp:run`
-4. Flatpak `finish-args --env=…`
+Skiko/DPI JVM args for Linux are set in `desktopApp` and in `Main.kt`.
 
-Optional niri config:
-
-```kdl
-environment {
-    _JAVA_AWT_WM_NONREPARENTING "1"
-}
-```
+Stale windows: `pkill -f 'dev.haasele.koma'`.
 
 ---
 
 ## Android
 
-| Task | Output |
-| --- | --- |
-| `:androidApp:assembleDebug` | `androidApp/build/outputs/apk/debug/androidApp-debug.apk` |
-| `:androidApp:assembleRelease` | `androidApp/build/outputs/apk/release/` |
-| `:androidApp:bundleDebug` / `bundleRelease` | `androidApp/build/outputs/bundle/…` |
-| `:androidApp:installDebug` | device / emulator |
-
-Application id: `dev.haasele.koma`.
-
 ```bash
-./gradlew :androidApp:assembleDebug
-adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
+./kotlin build -p android -m androidApp
+./kotlin package -p android -m androidApp -f aab -v debug
 ```
 
----
-
-## Shared library
-
-| Task | Output |
-| --- | --- |
-| `:shared:jvmJar` | `shared/build/libs/` |
-| `:shared:jvmTest` | `shared/build/reports/tests/jvmTest/` |
-
----
-
-## Output tree
-
-```text
-composeApp/build/compose/binaries/main/
-├── app/koma-native/bin/koma-native    # jpackage ELF
-├── appimage/koma-native-1.0.0-<arch>.AppImage
-├── flatpak/dev.haasele.KomaNative.flatpak
-└── rpm/ | deb/ | dmg/ | msi/          # when built
-
-composeApp/build/compose/jars/*.jar
-
-androidApp/build/outputs/apk/debug/androidApp-debug.apk
-shared/build/libs/
-```
-
----
-
-## Tooling
-
-| Artifact | Needs |
-| --- | --- |
-| Desktop run / JAR / unpacked app | JDK **17+** (bytecode target 17) |
-| Real `.AppImage` | `appimagetool` |
-| Flatpak | `flatpak`, `flatpak-builder`, Freedesktop 24.08 |
-| RPM / DEB | `rpmbuild` / `dpkg-deb` |
-| DMG / MSI | macOS / Windows+WiX |
-| Android APK | Android SDK |
-
-```bash
-./gradlew :composeApp:tasks --group=distribution
-```
+Requires an Android SDK (`ANDROID_HOME` / `ANDROID_SDK_ROOT` / `local.properties`).
