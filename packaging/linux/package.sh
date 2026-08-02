@@ -80,10 +80,14 @@ cmd_appimage() {
   cp -a "${app_dir}/." "$appdir/"
   restore_native_launcher "$appdir"
 
-  # AppRun is required by the AppImage format (not a Wayland helper).
+  # AppRun is required by the AppImage format. Export Wayland/Java AWT env here so the
+  # JVM never needs a fragile re-exec (which used to pass --debug to HotSpot).
   cat > "${appdir}/AppRun" <<EOF
 #!/bin/sh
 HERE="\$(dirname "\$(readlink -f "\$0")")"
+export _JAVA_AWT_WM_NONREPARENTING=1
+export GDK_SCALE="\${GDK_SCALE:-1}"
+export GDK_DPI_SCALE="\${GDK_DPI_SCALE:-1}"
 exec "\$HERE/bin/${app_name}" "\$@"
 EOF
   chmod +x "${appdir}/AppRun"

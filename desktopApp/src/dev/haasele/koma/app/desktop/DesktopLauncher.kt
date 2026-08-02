@@ -66,30 +66,105 @@ internal fun ensureNativeWaylandEnv(args: Array<String>): Boolean {
     System.err.println(
         "koma-desktop: re-exec with _JAVA_AWT_WM_NONREPARENTING=1 (Wayland / xwayland-satellite)",
     )
+    System.err.println("koma-desktop: re-exec argv: ${command.joinToString(" ")}")
     exitProcess(builder.start().waitFor())
 }
 
+/**
+ * Rebuild a safe argv for re-exec.
+ *
+ * Never reuse [ProcessHandle] arguments blindly: for jpackage/AppImage the reported command is
+ * often `…/runtime/bin/java` while arguments are only the *application* flags (`--debug`).
+ * Re-running that as `java --debug` makes HotSpot treat `--debug` as a JVM option and abort.
+ */
 private fun buildReexecCommand(args: Array<String>): List<String>? {
-    val info = ProcessHandle.current().info()
-    val executable = info.command().orElse(null)?.takeIf { it.isNotBlank() }
-    val processArgs = info.arguments()
+    val appArgs = args.toList()
 
-    // Prefer the exact argv that started us (covers `java -jar …` and jpackage).
-    if (executable != null && processArgs.isPresent) {
-        return listOf(executable) + processArgs.get().toList()
+    // jpackage sets this to the native launcher (bin/koma-native). Prefer it.
+    System.getProperty("jpackage.app-path")
+        ?.takeIf { it.isNotBlank() && File(it).canExecute() }
+        ?.let { return listOf(it) + appArgs }
+
+    val info = ProcessHandle.current().info()
+    val command = info.command().orElse(null)?.takeIf { it.isNotBlank() }
+    val processArgs = info.arguments().orElse(null)?.toList()
+
+    // Native ELF launcher reported as the process image.
+    if (command != null && !isJavaBinary(command) && File(command).canExecute()) {
+        return listOf(command) + appArgs
     }
 
+    // Plain `java -jar …` / IDE runs: reconstruct from java.home + our jar.
     val jar = jarPathOf(DesktopLauncher::class.java)
     if (jar != null) {
-        val java = File(System.getProperty("java.home"), "bin/java")
-        if (!java.canExecute()) return null
-        return listOf(java.absolutePath) + defaultJvmArgs() + listOf("-jar", jar) + args
+        val java = javaExecutable(command)
+        if (java != null) {
+            return listOf(java) + defaultJvmArgs() + listOf("-jar", jar) + appArgs
+        }
     }
 
-    if (executable != null) {
-        return listOf(executable) + args
+    // Full JVM argv from the OS (must already look like a java invocation).
+    if (command != null && isJavaBinary(command) && processArgs != null && looksLikeJvmArgv(processArgs)) {
+        return listOf(command) + replaceAppArgs(processArgs, appArgs)
+    }
+
+    return null
+}
+
+private fun isJavaBinary(path: String): Boolean {
+    val name = File(path).name.lowercase()
+    return name == "java" || name == "java.exe"
+}
+
+private fun javaExecutable(processCommand: String?): String? {
+    val fromHome = File(System.getProperty("java.home"), "bin/java")
+    if (fromHome.canExecute()) return fromHome.absolutePath
+    if (processCommand != null && isJavaBinary(processCommand) && File(processCommand).canExecute()) {
+        return processCommand
     }
     return null
+}
+
+/** True when [argv] already contains JVM wiring (-jar / -cp / -m / -D…), not only app flags. */
+private fun looksLikeJvmArgv(argv: List<String>): Boolean {
+    if (argv.isEmpty()) return false
+    if (argv.any { it == "-jar" || it == "-cp" || it == "-classpath" || it == "-m" || it == "--module" }) {
+        return true
+    }
+    return argv.any { token ->
+        token.startsWith("-D") ||
+            token.startsWith("-X") ||
+            token.startsWith("-javaagent") ||
+            token.startsWith("--add-") ||
+            token.startsWith("--enable-") ||
+            token.startsWith("-Djpackage.")
+    }
+}
+
+/**
+ * Drop previous trailing application arguments and append [appArgs].
+ * Keeps everything up to and including `-jar <file>`, `-m <module>`, or the main class.
+ */
+private fun replaceAppArgs(processArgs: List<String>, appArgs: List<String>): List<String> {
+    var i = 0
+    while (i < processArgs.size) {
+        val token = processArgs[i]
+        when {
+            token == "-jar" || token == "-m" || token == "--module" ||
+                token == "-cp" || token == "-classpath" -> {
+                // flag + value; app args start after that
+                return processArgs.take(i + 2) + appArgs
+            }
+            token.startsWith("-") -> i += 1
+            token.contains('.') && token.any { it.isUpperCase() } -> {
+                // likely main class
+                return processArgs.take(i + 1) + appArgs
+            }
+            else -> i += 1
+        }
+    }
+    // Could not find a split point — do not risk passing app flags to the JVM.
+    return processArgs
 }
 
 private fun defaultJvmArgs(): List<String> = listOf(
@@ -106,6 +181,8 @@ private fun jarPathOf(type: Class<*>): String? {
 }
 
 private fun commandName(): String {
+    System.getProperty("jpackage.app-path")?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
+        ?.let { return it }
     val jar = jarPathOf(DesktopLauncher::class.java)
     if (jar != null) return "java -jar ${File(jar).name}"
     return ProcessHandle.current().info().command().orElse("koma-native")
