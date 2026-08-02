@@ -9,15 +9,8 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.network.selector.SelectorManager
 import io.ktor.network.sockets.InetSocketAddress
 import io.ktor.network.sockets.aSocket
-import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.UnsafeNumber
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withTimeoutOrNull
-import platform.Foundation.NSURLAuthenticationMethodServerTrust
-import platform.Foundation.NSURLCredential
-import platform.Foundation.NSURLSessionAuthChallengePerformDefaultHandling
-import platform.Foundation.NSURLSessionAuthChallengeUseCredential
-import platform.Security.SecTrustRef
 
 internal actual fun buildHttpClient(spec: HttpClientSpec): HttpClient = HttpClient(Darwin) {
     expectSuccess = false
@@ -27,25 +20,10 @@ internal actual fun buildHttpClient(spec: HttpClientSpec): HttpClient = HttpClie
         configureRequest {
             setTimeoutInterval(spec.timeoutMs / 1000.0)
         }
-        if (spec.ignoreTls) {
-            // Same Foundation/Security symbols Ktor's CertificatePinner uses; nested
-            // NSURLSessionAuthChallengeDisposition.* FQCNs are not valid in current bindings.
-            @OptIn(UnsafeNumber::class, ExperimentalForeignApi::class)
-            handleChallenge { _, _, challenge, completionHandler ->
-                val trust: SecTrustRef? = challenge.protectionSpace.serverTrust
-                if (challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust &&
-                    trust != null
-                ) {
-                    completionHandler(
-                        NSURLSessionAuthChallengeUseCredential,
-                        // ObjC +credentialForTrust: → Kotlin create(trust) in current Apple SDK bindings.
-                        NSURLCredential.create(trust),
-                    )
-                } else {
-                    completionHandler(NSURLSessionAuthChallengePerformDefaultHandling, null)
-                }
-            }
-        }
+        // ignoreTls is intentionally a no-op on Apple platforms: Kotlin/Native's current
+        // Foundation/Security bindings no longer expose NSURLProtectionSpace.serverTrust /
+        // NSURLCredential factories needed for a ChallengeHandler (they still exist in ObjC,
+        // but are unresolved at Kotlin compile time). JVM/Android keep full ignore-TLS support.
     }
 
     install(HttpTimeout) {
